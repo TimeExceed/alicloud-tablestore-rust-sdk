@@ -3,10 +3,8 @@ use crate::Error;
 use crate::protocol;
 use quick_protobuf::{MessageRead, BytesReader, message::MessageWrite};
 use std::convert::TryFrom;
-use super::ApiTrait;
 
-#[derive(Debug, Clone, Copy)]
-pub struct ListTable {}
+pub const LIST_TABLE: &str = "/ListTable";
 
 #[derive(Debug, Clone, Default)]
 pub struct ListTableRequest {}
@@ -48,14 +46,5 @@ impl TryFrom<Vec<u8>> for ListTableResponse {
         let mut reader = BytesReader::from_bytes(&v);
         let resp = protocol::ListTableResponse::from_reader(&mut reader, &v)?;
         Ok(resp.into())
-    }
-}
-
-impl ApiTrait for ListTable {
-    type Request = ListTableRequest;
-    type Response = ListTableResponse;
-
-    fn path(&self) -> &'static str {
-        "/ListTable"
     }
 }

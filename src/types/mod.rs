@@ -1,12 +1,14 @@
-use bytes::Bytes;
-use crate::Error;
-use std::convert::TryFrom;
+#[derive(Debug, Copy, Clone)]
+pub(crate) struct Api {
+    pub path: &'static str,
+}
 
-pub(crate) trait ApiTrait {
-    type Request: Into<Bytes>;
-    type Response: TryFrom<Vec<u8>, Error=Error>;
-
-    fn path(&self) -> &'static str;
+impl Api {
+    pub(crate) fn new(path: &'static str) -> Api {
+        Api{
+            path,
+        }
+    }
 }
 
 mod list_table;

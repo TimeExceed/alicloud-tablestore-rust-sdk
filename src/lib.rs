@@ -14,3 +14,4 @@ mod types;
 pub use self::types::*;
 
 mod protocol;
+mod client_impl;
