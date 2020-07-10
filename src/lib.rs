@@ -15,3 +15,6 @@ pub use self::types::*;
 
 mod protocol;
 mod client_impl;
+
+mod client_options;
+pub use client_options::*;

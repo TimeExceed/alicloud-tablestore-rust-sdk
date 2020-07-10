@@ -1,11 +1,12 @@
 use bytes::Bytes;
 use chrono::prelude::*;
-use crate::{Endpoint, Credential, Error, ErrorCode, types};
+use crate::{Endpoint, Credential, ClientOptions, Error, ErrorCode, types};
 use crypto::digest::Digest;
 use crypto::mac::Mac;
 use log::*;
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
+use std::sync::atomic::{AtomicI64, Ordering};
 use tokio::stream::StreamExt;
 use tokio::sync::{mpsc, oneshot};
 
@@ -13,6 +14,7 @@ use tokio::sync::{mpsc, oneshot};
 pub(crate) struct ClientImpl {
     endpoint: Endpoint,
     credential: Credential,
+    client_opts: ClientOptions,
     http_clients: hyper::Client<hyper::client::HttpConnector<hyper::client::connect::dns::GaiResolver>, hyper::Body>,
 }
 
@@ -20,11 +22,13 @@ impl ClientImpl {
     pub(crate) fn new(
         endpoint: Endpoint, 
         credential: Credential,
+        client_opts: ClientOptions,
     ) -> mpsc::Sender<Cmd> {
         let (tx, rx) = mpsc::channel(1);
         let client = ClientImpl{
             endpoint,
             credential,
+            client_opts,
             http_clients: hyper::Client::new(),
         };
         tokio::spawn(client.run(rx));
@@ -32,10 +36,11 @@ impl ClientImpl {
     }
 
     async fn run(self, mut cmd_recv: mpsc::Receiver<Cmd>) {
+        let concurrency = AtomicI64::new(self.client_opts.concurrency);
         while let Some(cmd) = cmd_recv.recv().await {
             match cmd {
                 Cmd::ListTable(api, req, resp_tx) => {
-                    self.async_issue(api, req, resp_tx);
+                    self.async_issue(api, req, resp_tx, &concurrency);
                 }
             }
         }
@@ -46,13 +51,24 @@ impl ClientImpl {
         api: types::Api,
         req: Req,
         resp_tx: oneshot::Sender<Result<Resp, Error>>,
+        concurrency: &AtomicI64,
     ) -> ()
     where 
         Req: 'static + Into<Bytes> + Send,
         Resp: 'static + types::Response + TryFrom<Vec<u8>, Error=Error> + std::fmt::Debug + Send,
     {
+        let atom = match AtomicWrap::try_new(concurrency) {
+            Ok(x) => x,
+            Err(mut err) => {
+                info!("Too many concurrent requests.");
+                err.message = "too many concurrent requests.".to_string();
+                resp_tx.send(Err(err)).unwrap();
+                return;
+            }
+        };
         let client = self.clone();
         tokio::spawn(async move {
+            let _atom = atom;
             let resp = client.issue(api, req).await;
             resp_tx.send(resp).unwrap()
         });
@@ -386,4 +402,34 @@ fn content_md5(body: &[u8]) -> Result<String, Error> {
     ctx.result(&mut digest);
     let digest = base64::encode(&digest);
     Ok(digest)
+}
+
+struct AtomicWrap(*const AtomicI64);
+
+unsafe impl Send for AtomicWrap {}
+
+impl AtomicWrap {
+    fn try_new(v: &AtomicI64) -> Result<AtomicWrap, Error> {
+        let c = v.fetch_sub(1, Ordering::Acquire);
+        debug!("concurrency before acquiring: {}", c);
+        if c <= 0 {
+            v.fetch_add(1, Ordering::Release);
+            let err = Error{
+                code: ErrorCode::NoAvailableConnection,
+                message: String::new(),
+            };
+            return Err(err);
+        }
+        Ok(Self(v))
+    }
+}
+
+impl Drop for AtomicWrap {
+    fn drop(&mut self) {
+        let v: &AtomicI64 = unsafe{
+            self.0.as_ref().unwrap()
+        };
+        let c = v.fetch_add(1, Ordering::Release);
+        debug!("concurrency after releasing: {}", c + 1);
+    }
 }

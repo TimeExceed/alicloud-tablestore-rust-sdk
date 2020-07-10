@@ -1,4 +1,4 @@
-use crate::{Endpoint, Credential, Error, types};
+use crate::{Endpoint, Credential, ClientOptions, Error, types};
 use crate::client_impl;
 use log::*;
 use tokio::sync::{mpsc, oneshot};
@@ -12,8 +12,9 @@ impl Client {
     pub fn new(
         endpoint: Endpoint, 
         credential: Credential,
+        opts: ClientOptions,
     ) -> Result<Client, Error> {
-        let tx = client_impl::ClientImpl::new(endpoint, credential);
+        let tx = client_impl::ClientImpl::new(endpoint, credential, opts);
         let res = Client{
             cmd_sender: tx,
         };

@@ -10,7 +10,7 @@ pub struct Error {
 
 #[derive(Debug, Clone, Copy)]
 pub enum ErrorCode {
-    NetworkUnknown,
+    ClientUnknown,
     CouldntResolveHost,
     CouldntConnect,
     OperationTimeout,
@@ -54,7 +54,7 @@ impl From<hyper::Error> for Error {
             x if x.is_incomplete_message() => ErrorCode::CorruptedResponse,
             x if x.is_body_write_aborted() => ErrorCode::WriteRequestFail,
             x if x.is_timeout() => ErrorCode::OperationTimeout,
-            _ => ErrorCode::NetworkUnknown,
+            _ => ErrorCode::ClientUnknown,
         };
         Error{
             code: ec,

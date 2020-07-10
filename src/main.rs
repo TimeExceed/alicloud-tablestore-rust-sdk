@@ -1,10 +1,24 @@
 use tablestore as ots;
 
+fn try_me<T>(v: Result<T, std::env::VarError>) -> Result<T, ots::Error> {
+    match v {
+        Ok(x) => Ok(x),
+        Err(err) => {
+            let err = ots::Error{
+                code: ots::ErrorCode::ClientUnknown,
+                message: format!("{:?}", err),
+            };
+            Err(err)
+        }
+    }
+}
+
 async fn async_gogogo(
     ep: ots::Endpoint,
     cred: ots::Credential,
 ) -> Result<(), ots::Error> {
-    let client = ots::Client::new(ep, cred)?;
+    let opts = ots::ClientOptions::default();
+    let client = ots::Client::new(ep, cred, opts)?;
     let resp = client.list_table().await?;
     for t in resp.tables.iter() {
         println!("table: {}", t);
@@ -14,12 +28,12 @@ async fn async_gogogo(
 
 fn gogogo() -> Result<(), ots::Error> {
     let ep = ots::Endpoint::new(
-        "http://taoda-test.cn-hangzhou.ots.aliyuncs.com", 
-        "taoda-test",
+        try_me(std::env::var("OTS_ENDPOINT"))?,
+        try_me(std::env::var("OTS_INSTANCE"))?,
     )?;
     let cred = ots::Credential::new(
-        "dZKNjrnI3IWuvDYm",
-        "TgjKZlEKlQkHjBG0pi7Q6uCEG6jgnx",
+        try_me(std::env::var("OTS_AK_ID"))?,
+        try_me(std::env::var("OTS_AK_SECRET"))?,
     )?;
     let mut res: Result<(), ots::Error> = Ok(());
     {
