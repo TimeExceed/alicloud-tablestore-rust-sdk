@@ -138,3 +138,21 @@ impl TryFrom<&[u8]> for Error {
         Err(error.into())
     }
 }
+
+impl From<http::header::ToStrError> for Error {
+    fn from(v: http::header::ToStrError) -> Self {
+        Error{
+            code: ErrorCode::CorruptedResponse,
+            message: format!("{}", v),
+        }
+    }
+}
+
+impl From<chrono::format::ParseError> for Error {
+    fn from(v: chrono::format::ParseError) -> Self {
+        Error{
+            code: ErrorCode::CorruptedResponse,
+            message: format!("{}", v),
+        }
+    }
+}

@@ -49,7 +49,7 @@ impl ClientImpl {
     ) -> ()
     where 
         Req: 'static + Into<Bytes> + Send,
-        Resp: 'static + TryFrom<Vec<u8>, Error=Error> + std::fmt::Debug + Send,
+        Resp: 'static + types::Response + TryFrom<Vec<u8>, Error=Error> + std::fmt::Debug + Send,
     {
         let client = self.clone();
         tokio::spawn(async move {
@@ -65,7 +65,7 @@ impl ClientImpl {
     ) -> Result<Resp, Error>
     where
         Req: Into<Bytes>,
-        Resp: TryFrom<Vec<u8>, Error=Error> + std::fmt::Debug,
+        Resp: types::Response + TryFrom<Vec<u8>, Error=Error> + std::fmt::Debug,
     {
         debug!("Issue a request.\
             \tpath: {}",
@@ -159,17 +159,56 @@ impl ClientImpl {
         resp: http::Response<hyper::Body>,
     ) -> Result<Resp, Error> 
     where
-        Resp: TryFrom<Vec<u8>, Error=Error>,
+        Resp: types::Response + TryFrom<Vec<u8>, Error=Error>,
     {
         let status = match resp.status().as_u16() {
             x if x >= 200 && x < 300 => StatusKind::Ok,
             x if x == 502 => StatusKind::ErrorFromMiddle,
             _ => StatusKind::ErrorFromService,
         };
+
+        let resp_headers = resp.headers();
+        let expect_body_md5 = if let Some(exp) = resp_headers.get(HEADER_NAME_CONTENT_MD5) {
+            Some(exp.to_str()?.to_string())
+        } else {
+            None
+        };
+        let server_timestamp = if let Some(tm) = resp_headers.get(HEADER_NAME_OTS_DATE) {
+            let tm = tm.to_str()?;
+            let tm = DateTime::parse_from_rfc3339(tm)?.with_timezone(&Utc{});
+            Some(tm)
+        } else {
+            None
+        };
+        let req_id = if let Some(req_id) = resp_headers.get(HEADER_NAME_REQUEST_ID) {
+            Some(req_id.to_str()?.to_string())
+        } else {
+            None
+        };
+
         let resp_body = resp.into_body();
         let body = collect_body(resp_body).await?;
+        if let Some(expect_body_md5) = expect_body_md5 {
+            let real_body_md5 = content_md5(&body)?;
+            if real_body_md5 != expect_body_md5 {
+                info!("Got a response, with corrupted body.\
+                    \texpect: {}\
+                    \treal: {}",
+                    expect_body_md5,
+                    real_body_md5);
+                return Err(Error{
+                    code: ErrorCode::CorruptedResponse,
+                    message: "Got a response, with corrupted body.".to_string(),
+                });
+            }
+        }
         match status {
-            StatusKind::Ok => Ok(body.try_into()?),
+            StatusKind::Ok => {
+                let mut resp: Resp = body.try_into()?;
+                resp.set_server_timestamp(server_timestamp);
+                resp.set_request_id(req_id);
+                Ok(resp)
+            }
             StatusKind::ErrorFromService => Err(body.as_slice().try_into()?),
             StatusKind::ErrorFromMiddle => {
                 let message = match String::from_utf8(body) {
@@ -210,6 +249,7 @@ const HEADER_NAME_ACCESS_TOKEN: &str = "x-ots-ststoken";
 const HEADER_NAME_OTS_DATE: &str = "x-ots-date";
 const HEADER_NAME_CONTENT_MD5: &str = "x-ots-contentmd5";
 const HEADER_NAME_SIGNATURE: &str = "x-ots-signature";
+const HEADER_NAME_REQUEST_ID: &str = "x-ots-requestid";
 
 enum StatusKind {
     Ok,
