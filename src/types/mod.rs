@@ -37,3 +37,5 @@ impl Default for BaseResponse {
 
 mod list_table;
 pub use self::list_table::*;
+mod table_meta;
+pub use self::table_meta::*;

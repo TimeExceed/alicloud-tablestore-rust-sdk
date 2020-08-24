@@ -13,7 +13,10 @@ http = "0.2.1"
 hyper = "0.13.6"
 log = "0.4.8"
 quick-protobuf = "0.7.0"
+rand = "0.7.3"
 rust-crypto = "0.2.36"
 tokio = {version = "0.2.21", features = ["full"]}
 
 [dev-dependencies]
+quickcheck = "0.9.2"
+quickcheck_macros = "0.9.1"

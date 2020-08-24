@@ -1,3 +1,7 @@
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
+
 pub mod error;
 pub use self::error::{Error, ErrorCode};
 
