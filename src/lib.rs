@@ -1,6 +1,7 @@
 #[cfg(test)]
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
+#[macro_use] extern crate log;
 
 pub mod error;
 pub use self::error::{Error, ErrorCode};
