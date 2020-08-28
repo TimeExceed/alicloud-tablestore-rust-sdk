@@ -41,10 +41,13 @@ impl ClientImpl {
             match cmd {
                 Cmd::ListTable(api, req, resp_tx) => {
                     self.async_issue(api, req, resp_tx, &concurrency);
-                },
+                }
                 Cmd::CreateTable(api, req, resp_tx) => {
                     self.async_issue(api, req, resp_tx, &concurrency);
-                },
+                }
+                Cmd::DeleteTable(api, req, resp_tx) => {
+                    self.async_issue(api, req, resp_tx, &concurrency);
+                }
             }
         }
     }
@@ -264,6 +267,11 @@ pub(crate) enum Cmd {
         types::Api,
         types::CreateTableRequest,
         oneshot::Sender<Result<types::CreateTableResponse, Error>>,
+    ),
+    DeleteTable(
+        types::Api,
+        types::DeleteTableRequest,
+        oneshot::Sender<Result<types::DeleteTableResponse, Error>>,
     ),
 }
 

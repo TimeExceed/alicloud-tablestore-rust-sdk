@@ -5,35 +5,37 @@ use crate::protocol as pb;
 use quick_protobuf::{MessageRead, BytesReader, message::MessageWrite};
 use std::convert::TryFrom;
 
-pub const LIST_TABLE: &str = "/ListTable";
+pub const DELETE_TABLE: &str = "/DeleteTable";
 
 #[derive(Debug, Clone, Default)]
-pub struct ListTableRequest {}
+pub struct DeleteTableRequest {
+    pub name: String,
+}
 
 #[derive(Debug, Clone)]
-pub struct ListTableResponse {
+pub struct DeleteTableResponse {
     base: super::BaseResponse,
-    pub tables: Vec<String>,
 }
 
-impl From<ListTableRequest> for pb::ListTableRequest {
-    fn from(_: ListTableRequest) -> pb::ListTableRequest {
-        pb::ListTableRequest{}
-    }
-}
-
-impl From<pb::ListTableResponse> for ListTableResponse {
-    fn from(x: pb::ListTableResponse) -> ListTableResponse {
-        ListTableResponse{
-            base: super::BaseResponse::default(),
-            tables: x.table_names,
+impl From<DeleteTableRequest> for pb::DeleteTableRequest {
+    fn from(x: DeleteTableRequest) -> pb::DeleteTableRequest {
+        pb::DeleteTableRequest{
+            table_name: x.name,
         }
     }
 }
 
-impl From<ListTableRequest> for Bytes {
-    fn from(x: ListTableRequest) -> Bytes {
-        let req: pb::ListTableRequest = x.into();
+impl From<pb::DeleteTableResponse> for DeleteTableResponse {
+    fn from(_x: pb::DeleteTableResponse) -> DeleteTableResponse {
+        DeleteTableResponse{
+            base: super::BaseResponse::default(),
+        }
+    }
+}
+
+impl From<DeleteTableRequest> for Bytes {
+    fn from(x: DeleteTableRequest) -> Bytes {
+        let req: pb::DeleteTableRequest = x.into();
         let len = req.get_size();
         let mut body = Vec::new();
         body.resize(len, 0u8);
@@ -44,17 +46,17 @@ impl From<ListTableRequest> for Bytes {
     }
 }
 
-impl TryFrom<Vec<u8>> for ListTableResponse {
+impl TryFrom<Vec<u8>> for DeleteTableResponse {
     type Error = Error;
 
     fn try_from(v: Vec<u8>) -> Result<Self, Self::Error> {
         let mut reader = BytesReader::from_bytes(&v);
-        let resp = pb::ListTableResponse::from_reader(&mut reader, &v)?;
+        let resp = pb::DeleteTableResponse::from_reader(&mut reader, &v)?;
         Ok(resp.into())
     }
 }
 
-impl super::Response for ListTableResponse {
+impl super::Response for DeleteTableResponse {
     fn set_server_timestamp(&mut self, tm: Option<DateTime<Utc>>) -> () {
         self.base.server_timestamp = tm;
     }

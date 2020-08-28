@@ -47,5 +47,18 @@ impl Client {
         rx.await.unwrap()
     }
 
+    pub async fn delete_table(
+        &self,
+        name: String,
+    ) -> Result<types::DeleteTableResponse, Error> {
+        let req = types::DeleteTableRequest{
+            name,
+        };
+        let api = types::Api::new(types::DELETE_TABLE);
+        let (tx, rx) = oneshot::channel();
+        let cmd = client_impl::Cmd::DeleteTable(api, req, tx);
+        self.cmd_sender.clone().send(cmd).await.unwrap();
+        rx.await.unwrap()
+    }
 }
 

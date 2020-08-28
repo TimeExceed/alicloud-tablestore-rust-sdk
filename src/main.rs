@@ -19,18 +19,21 @@ async fn async_gogogo(
 ) -> Result<(), ots::Error> {
     let opts = ots::ClientOptions::default();
     let client = ots::Client::new(ep, cred, opts)?;
+    // {
+    //     let meta = ots::TableMeta{
+    //         name: "Smile".to_string(),
+    //         schema: vec![
+    //             ots::PkeyColumnSchema{
+    //                 name: "haha".to_string(),
+    //                 type_: ots::PkeyValueType::String,
+    //             },
+    //         ],
+    //     };
+    //     let opts = ots::TableOptions::default_for_create();
+    //     let _resp = client.create_table(meta, opts).await?;
+    // }
     {
-        let meta = ots::TableMeta{
-            name: "Smile".to_string(),
-            schema: vec![
-                ots::PkeyColumnSchema{
-                    name: "haha".to_string(),
-                    type_: ots::PkeyValueType::String,
-                },
-            ],
-        };
-        let opts = ots::TableOptions::default_for_create();
-        let _resp = client.create_table(meta, opts).await?;
+        let _resp = client.delete_table("Smile".to_string()).await?;
     }
     {
         let resp = client.list_table().await?;

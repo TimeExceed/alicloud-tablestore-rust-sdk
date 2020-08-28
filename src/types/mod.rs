@@ -45,3 +45,5 @@ mod list_table;
 pub use self::list_table::*;
 mod create_table;
 pub use self::create_table::*;
+mod delete_table;
+pub use self::delete_table::*;
