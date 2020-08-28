@@ -41,7 +41,10 @@ impl ClientImpl {
             match cmd {
                 Cmd::ListTable(api, req, resp_tx) => {
                     self.async_issue(api, req, resp_tx, &concurrency);
-                }
+                },
+                Cmd::CreateTable(api, req, resp_tx) => {
+                    self.async_issue(api, req, resp_tx, &concurrency);
+                },
             }
         }
     }
@@ -54,7 +57,7 @@ impl ClientImpl {
         concurrency: &AtomicI64,
     ) -> ()
     where 
-        Req: 'static + Into<Bytes> + Send,
+        Req: 'static + Into<Bytes> + Send + std::fmt::Debug,
         Resp: 'static + types::Response + TryFrom<Vec<u8>, Error=Error> + std::fmt::Debug + Send,
     {
         let atom = match AtomicWrap::try_new(concurrency) {
@@ -80,12 +83,14 @@ impl ClientImpl {
         req: Req,
     ) -> Result<Resp, Error>
     where
-        Req: Into<Bytes>,
+        Req: Into<Bytes> + std::fmt::Debug,
         Resp: types::Response + TryFrom<Vec<u8>, Error=Error> + std::fmt::Debug,
     {
-        debug!("Issue a request.\
-            \tpath: {}",
-            api.path);
+        debug!("Going to issue a new request.\
+            \tpath: {}\
+            \trequest: {:?}",
+            api.path,
+            req);
         let resp = self.issue_req(api, req).await;
         let resp = match resp {
             Ok(resp) => {
@@ -140,7 +145,8 @@ impl ClientImpl {
             .method(http::method::Method::POST)
             .uri(url);
         let body: Bytes = req.into();
-        self.build_headers(req_builder.headers_mut().unwrap(), &body)?;
+        debug!("body: {:?}", body);
+        self.build_headers(api.path, req_builder.headers_mut().unwrap(), &body)?;
         let (mut sender, bd) = hyper::Body::channel();
         let req = req_builder.body(bd)?;
         let body = sender.send_data(body);
@@ -152,6 +158,7 @@ impl ClientImpl {
 
     fn build_headers(
         &self, 
+        path: &str,
         req_headers: &mut http::HeaderMap<http::HeaderValue>,
         body: &[u8],
     ) -> Result<(), Error> {
@@ -165,7 +172,7 @@ impl ClientImpl {
         builder.set_datetime()?;
         let body_digest = content_md5(body)?;
         builder.set_content_md5(body_digest)?;
-        builder.sign(&self.credential.secret)?;
+        builder.sign(path, &self.credential.secret)?;
         Ok(())
     }
 
@@ -251,7 +258,13 @@ pub(crate) enum Cmd {
     ListTable(
         types::Api, 
         types::ListTableRequest,
-        oneshot::Sender<Result<types::ListTableResponse, Error>>),
+        oneshot::Sender<Result<types::ListTableResponse, Error>>,
+    ),
+    CreateTable(
+        types::Api,
+        types::CreateTableRequest,
+        oneshot::Sender<Result<types::CreateTableResponse, Error>>,
+    ),
 }
 
 const HEADER_NAME_API_VERSION: &str = "x-ots-apiversion";
@@ -376,10 +389,11 @@ impl HeaderBuilder<'_> {
         Ok(())
     }
 
-    fn sign(self, secret: &[u8]) -> Result<(), Error> {
+    fn sign(self, path: &str, secret: &[u8]) -> Result<(), Error> {
         let hasher = crypto::sha1::Sha1::new();
         let mut hmac = crypto::hmac::Hmac::new(hasher, secret);
-        hmac.input(b"/ListTable\nPOST\n\n");
+        hmac.input(path.as_bytes());
+        hmac.input(b"\nPOST\n\n");
         for (k, v) in self.ordered.iter() {
             hmac.input(k.as_bytes());
             hmac.input(b":");

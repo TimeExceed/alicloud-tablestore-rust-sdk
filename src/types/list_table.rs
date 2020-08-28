@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use chrono::*;
 use crate::Error;
-use crate::protocol;
+use crate::protocol as pb;
 use quick_protobuf::{MessageRead, BytesReader, message::MessageWrite};
 use std::convert::TryFrom;
 
@@ -15,14 +15,14 @@ pub struct ListTableResponse {
     pub tables: Vec<String>,
 }
 
-impl Into<protocol::ListTableRequest> for ListTableRequest {
-    fn into(self) -> protocol::ListTableRequest {
-        protocol::ListTableRequest{}
+impl From<ListTableRequest> for pb::ListTableRequest {
+    fn from(_: ListTableRequest) -> pb::ListTableRequest {
+        pb::ListTableRequest{}
     }
 }
 
-impl From<crate::protocol::ListTableResponse> for ListTableResponse {
-    fn from(x: crate::protocol::ListTableResponse) -> ListTableResponse {
+impl From<pb::ListTableResponse> for ListTableResponse {
+    fn from(x: pb::ListTableResponse) -> ListTableResponse {
         ListTableResponse{
             base: super::BaseResponse::default(),
             tables: x.table_names,
@@ -30,14 +30,15 @@ impl From<crate::protocol::ListTableResponse> for ListTableResponse {
     }
 }
 
-impl Into<Bytes> for ListTableRequest {
-    fn into(self) -> Bytes {
-        let req: protocol::ListTableRequest = self.into();
-        let mut body = Vec::with_capacity(req.get_size());
-        if req.get_size() > 0 {
-            let mut writer = quick_protobuf::writer::Writer::new(&mut body);
-            writer.write_message(&req).unwrap();
-        }
+impl From<ListTableRequest> for Bytes {
+    fn from(x: ListTableRequest) -> Bytes {
+        let req: pb::ListTableRequest = x.into();
+        let len = req.get_size();
+        let mut body = Vec::new();
+        body.resize(len, 0u8);
+        let writer = quick_protobuf::writer::BytesWriter::new(&mut body);
+        let mut writer = quick_protobuf::writer::Writer::new(writer);
+        req.write_message(&mut writer).unwrap();
         Bytes::from(body)
     }
 }
@@ -47,7 +48,7 @@ impl TryFrom<Vec<u8>> for ListTableResponse {
 
     fn try_from(v: Vec<u8>) -> Result<Self, Self::Error> {
         let mut reader = BytesReader::from_bytes(&v);
-        let resp = protocol::ListTableResponse::from_reader(&mut reader, &v)?;
+        let resp = pb::ListTableResponse::from_reader(&mut reader, &v)?;
         Ok(resp.into())
     }
 }

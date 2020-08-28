@@ -31,5 +31,21 @@ impl Client {
         rx.await.unwrap()
     }
 
+    pub async fn create_table(
+        &self,
+        table_meta: types::TableMeta,
+        options: types::TableOptions,
+    ) -> Result<types::CreateTableResponse, Error> {
+        let req = types::CreateTableRequest{
+            table_meta,
+            options,
+        };
+        let api = types::Api::new(types::CREATE_TABLE);
+        let (tx, rx) = oneshot::channel();
+        let cmd = client_impl::Cmd::CreateTable(api, req, tx);
+        self.cmd_sender.clone().send(cmd).await.unwrap();
+        rx.await.unwrap()
+    }
+
 }
 

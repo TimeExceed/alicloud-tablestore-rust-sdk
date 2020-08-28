@@ -43,3 +43,5 @@ mod table_options;
 pub use self::table_options::*;
 mod list_table;
 pub use self::list_table::*;
+mod create_table;
+pub use self::create_table::*;

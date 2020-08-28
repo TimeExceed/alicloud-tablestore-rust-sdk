@@ -65,7 +65,8 @@ impl From<TableOptions> for (pb::TableOptions, pb::CapacityUnit) {
             };
             let max_versions = match x.max_versions {
                 SettableValue::Value(mv) => Some(mv),
-                _ => None,
+                SettableValue::Default => Some(1),
+                SettableValue::NoChange => None,
             };
             let deviation_cell_version_in_sec = match x.deviated_duration {
                 SettableValue::Value(dd) => Some(dd.num_seconds()),
@@ -82,11 +83,13 @@ impl From<TableOptions> for (pb::TableOptions, pb::CapacityUnit) {
         let proto_cu = {
             let read = match x.capacity_unit.read {
                 SettableValue::Value(r) => Some(r),
-                _ => None,
+                SettableValue::Default => Some(0),
+                SettableValue::NoChange => None,
             };
             let write = match x.capacity_unit.write {
                 SettableValue::Value(w) => Some(w),
-                _ => None,
+                SettableValue::Default => Some(0),
+                SettableValue::NoChange => None,
             };
             pb::CapacityUnit{
                 read,
@@ -99,29 +102,32 @@ impl From<TableOptions> for (pb::TableOptions, pb::CapacityUnit) {
 
 impl From<(pb::TableOptions, pb::CapacityUnit)> for TableOptions {
     fn from(x: (pb::TableOptions, pb::CapacityUnit)) -> Self {
-        let time_to_live = if let Some(ttl) = x.0.time_to_live {
-            SettableValue::Value(chrono::Duration::seconds(ttl.into()))
-        } else {
-            SettableValue::Default
+        let time_to_live = match x.0.time_to_live {
+            Some(x) if x > 0 => {
+                SettableValue::Value(chrono::Duration::seconds(x.into()))
+            }
+            Some(_) => SettableValue::Default,
+            None => SettableValue::NoChange,
         };
-        let max_versions = if let Some(mv) = x.0.max_versions {
-            SettableValue::Value(mv)
-        } else {
-            SettableValue::Default
+        let max_versions = match x.0.max_versions {
+            Some(x) if x > 1 => SettableValue::Value(x),
+            Some(_) => SettableValue::Default,
+            None => SettableValue::NoChange,
         };
-        let deviated_duration = if let Some(dd) = x.0.deviation_cell_version_in_sec {
-            SettableValue::Value(chrono::Duration::seconds(dd))
-        } else {
-            SettableValue::Default
+        let deviated_duration = match x.0.deviation_cell_version_in_sec {
+            Some(x) => SettableValue::Value(chrono::Duration::seconds(x)),
+            None => SettableValue::Default,
         };
         let capacity_unit = {
             let read = match x.1.read {
-                Some(x) => SettableValue::Value(x),
-                None => SettableValue::Default,
+                Some(x) if x > 0 => SettableValue::Value(x),
+                Some(_) => SettableValue::Default,
+                None => SettableValue::NoChange,
             };
             let write = match x.1.write {
-                Some(x) => SettableValue::Value(x),
-                None => SettableValue::Default,
+                Some(x) if x > 0 => SettableValue::Value(x),
+                Some(_) => SettableValue::Default,
+                None => SettableValue::NoChange,
             };
             CapacityUnit{
                 read,
@@ -142,15 +148,18 @@ impl Arbitrary for TableOptions {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         let time_to_live = {
             let ttl = u16::arbitrary(g);
-            SettableValue::Value(chrono::Duration::seconds(ttl as i64))
+            let ttl = ttl as i64;
+            SettableValue::Value(chrono::Duration::seconds(ttl + 1))
         };
         let max_versions = {
             let mv = u16::arbitrary(g);
-            SettableValue::Value(mv as i32)
+            let mv = mv as i32;
+            SettableValue::Value(mv + 2)
         };
         let deviated_duration = {
             let dd = u32::arbitrary(g);
-            SettableValue::Value(chrono::Duration::seconds(dd as i64))
+            let dd = dd as i64;
+            SettableValue::Value(chrono::Duration::seconds(dd + 1))
         };
         Self{
             capacity_unit: CapacityUnit::arbitrary(g),
@@ -165,12 +174,14 @@ impl Arbitrary for TableOptions {
 impl Arbitrary for CapacityUnit {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         let read = {
-            let read = i32::arbitrary(g);
-            SettableValue::Value(read)
+            let read = u16::arbitrary(g);
+            let read = read as i32;
+            SettableValue::Value(read + 1)
         };
         let write = {
-            let write = i32::arbitrary(g);
-            SettableValue::Value(write)
+            let write = u16::arbitrary(g);
+            let write = write as i32;
+            SettableValue::Value(write + 1)
         };
         Self{
             read,
@@ -187,6 +198,12 @@ mod ut {
 
     #[quickcheck]
     fn tableoptions_serde_is_identity_0(oracle: TableOptions) -> bool {
+        match oracle.capacity_unit.write {
+            SettableValue::Value(_) => {},
+            _ => {
+                return true;
+            }
+        }
         println!("oracle: {:?}", oracle);
         let middle = <(pb::TableOptions, pb::CapacityUnit)>::from(oracle.clone());
         println!("middle: {:?}", middle);
@@ -222,7 +239,7 @@ mod ut {
                                 let v3 = v3.clone();
                                 let v4 = v4.clone();
                                 tx.send((v0, v1, v2, v3, v4)).await
-                                    .unwrap_or_else(|x| {
+                                    .unwrap_or_else(|_| {
                                         println!("Failed to send something into a mpsc channel.");
                                     });
                             }
@@ -407,23 +424,34 @@ mod ut {
                 );
             }
 
-            if let SettableValue::Value(mv) = oracle.max_versions {
-                assert!(trial_opts.max_versions.is_some(),
-                    "oracle: {:?} trial: {:?}",
-                    oracle,
-                    trial_opts
-                );
-                assert!(mv == trial_opts.max_versions.unwrap(),
-                    "oracle: {:?} trial: {:?}",
-                    oracle,
-                    trial_opts
-                );
-            } else {
-                assert!(trial_opts.max_versions.is_none(),
-                    "oracle: {:?} trial: {:?}",
-                    oracle,
-                    trial_opts
-                );
+            match oracle.max_versions {
+                SettableValue::Value(x) => {
+                    assert!(trial_opts.max_versions.is_some(),
+                        "oracle: {:?} trial: {:?}",
+                        oracle,
+                        trial_opts
+                    );
+                    assert!(x == trial_opts.max_versions.unwrap(),
+                        "oracle: {:?} trial: {:?}",
+                        oracle,
+                        trial_opts
+                    );
+                }
+                SettableValue::Default => {
+                    assert!(trial_opts.max_versions.is_some(),
+                        "oracle: {:?} trial: {:?}",
+                        oracle,
+                        trial_opts
+                    );
+                    assert_eq!(trial_opts.max_versions.unwrap(), 1);
+                }
+                SettableValue::NoChange => {
+                    assert!(trial_opts.max_versions.is_none(),
+                        "oracle: {:?} trial: {:?}",
+                        oracle,
+                        trial_opts
+                    );
+                }
             }
 
             if let SettableValue::Value(dd) = oracle.deviated_duration {
@@ -455,7 +483,15 @@ mod ut {
                     let trial_rcu = trial_cu.read.unwrap();
                     assert_eq!(oracle_rcu, trial_rcu);
                 }
-                _ => {
+                SettableValue::Default => {
+                    assert!(trial_cu.read.is_some(),
+                        "oracle: {:?} trial: {:?}",
+                        oracle,
+                        trial_cu);
+                    let trial_rcu = trial_cu.read.unwrap();
+                    assert_eq!(trial_rcu, 0);
+                }
+                SettableValue::NoChange => {
                     assert!(trial_cu.read.is_none(),
                     "oracle: {:?} trial: {:?}",
                     oracle,
@@ -472,7 +508,15 @@ mod ut {
                     let trial_wcu = trial_cu.write.unwrap();
                     assert_eq!(oracle_wcu, trial_wcu);
                 }
-                _ => {
+                SettableValue::Default => {
+                    assert!(trial_cu.write.is_some(),
+                        "oracle: {:?} trial: {:?}",
+                        oracle,
+                        trial_cu);
+                    let trial_wcu = trial_cu.write.unwrap();
+                    assert_eq!(trial_wcu, 0);
+                }
+                SettableValue::NoChange => {
                     assert!(trial_cu.write.is_none(),
                     "oracle: {:?} trial: {:?}",
                     oracle,
