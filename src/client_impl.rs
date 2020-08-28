@@ -20,7 +20,7 @@ pub(crate) struct ClientImpl {
 
 impl ClientImpl {
     pub(crate) fn new(
-        endpoint: Endpoint, 
+        endpoint: Endpoint,
         credential: Credential,
         client_opts: ClientOptions,
     ) -> mpsc::Sender<Cmd> {
@@ -39,14 +39,14 @@ impl ClientImpl {
         let concurrency = AtomicI64::new(self.client_opts.concurrency);
         while let Some(cmd) = cmd_recv.recv().await {
             match cmd {
-                Cmd::ListTable(api, req, resp_tx) => {
-                    self.async_issue(api, req, resp_tx, &concurrency);
+                Cmd::ListTable(req, resp_tx) => {
+                    self.async_issue(req, resp_tx, &concurrency);
                 }
-                Cmd::CreateTable(api, req, resp_tx) => {
-                    self.async_issue(api, req, resp_tx, &concurrency);
+                Cmd::CreateTable(req, resp_tx) => {
+                    self.async_issue(req, resp_tx, &concurrency);
                 }
-                Cmd::DeleteTable(api, req, resp_tx) => {
-                    self.async_issue(api, req, resp_tx, &concurrency);
+                Cmd::DeleteTable(req, resp_tx) => {
+                    self.async_issue(req, resp_tx, &concurrency);
                 }
             }
         }
@@ -54,13 +54,12 @@ impl ClientImpl {
 
     fn async_issue<Req, Resp>(
         &self,
-        api: types::Api,
         req: Req,
         resp_tx: oneshot::Sender<Result<Resp, Error>>,
         concurrency: &AtomicI64,
     ) -> ()
-    where 
-        Req: 'static + Into<Bytes> + Send + std::fmt::Debug,
+    where
+        Req: 'static + types::Request + Into<Bytes> + Send + std::fmt::Debug,
         Resp: 'static + types::Response + TryFrom<Vec<u8>, Error=Error> + std::fmt::Debug + Send,
     {
         let atom = match AtomicWrap::try_new(concurrency) {
@@ -75,32 +74,32 @@ impl ClientImpl {
         let client = self.clone();
         tokio::spawn(async move {
             let _atom = atom;
-            let resp = client.issue(api, req).await;
+            let resp = client.issue(req).await;
             resp_tx.send(resp).unwrap()
         });
     }
 
     async fn issue<Req, Resp>(
         &self,
-        api: types::Api,
         req: Req,
     ) -> Result<Resp, Error>
     where
-        Req: Into<Bytes> + std::fmt::Debug,
+        Req: types::Request + Into<Bytes> + std::fmt::Debug,
         Resp: types::Response + TryFrom<Vec<u8>, Error=Error> + std::fmt::Debug,
     {
+        let path = req.path();
         debug!("Going to issue a new request.\
             \tpath: {}\
             \trequest: {:?}",
-            api.path,
+            path,
             req);
-        let resp = self.issue_req(api, req).await;
+        let resp = self.issue_req(req).await;
         let resp = match resp {
             Ok(resp) => {
                 debug!("Ok to get the response.\
                     \tpath: {}\
                     \tresponse: {:?}",
-                    api.path,
+                    path,
                     resp);
                 resp
             }
@@ -108,17 +107,17 @@ impl ClientImpl {
                 info!("Fail to send the request.\
                     \tpath: {}\
                     \terror: {:?}",
-                    api.path,
+                    path,
                     err);
                 return Err(err);
             }
         };
-        match self.build_response(api, resp).await {
+        match self.build_response(resp).await {
             Ok(resp) => {
                 debug!("Ok to parse the response.\
                     \tpath: {}\
                     \tresponse: {:?}",
-                    api.path,
+                    path,
                     resp);
                 Ok(resp)
             }
@@ -126,7 +125,7 @@ impl ClientImpl {
                 info!("Fail to parse the response.\
                     \tpath: {}\
                     \terror: {:?}",
-                    api.path,
+                    path,
                     err);
                 Err(err)
             }
@@ -135,21 +134,21 @@ impl ClientImpl {
 
     async fn issue_req<Req>(
         &self,
-        api: types::Api,
         req: Req,
-    ) -> Result<http::Response<hyper::Body>, Error> 
+    ) -> Result<http::Response<hyper::Body>, Error>
     where
-        Req: Into<Bytes>,
+        Req: types::Request + Into<Bytes>,
     {
-        let url = format!("{}/{}",
+        let path = req.path();
+        let url = format!("{}{}",
             self.endpoint.address,
-            api.path);
+            path);
         let mut req_builder = http::Request::builder()
             .method(http::method::Method::POST)
             .uri(url);
         let body: Bytes = req.into();
         debug!("body: {:?}", body);
-        self.build_headers(api.path, req_builder.headers_mut().unwrap(), &body)?;
+        self.build_headers(path, req_builder.headers_mut().unwrap(), &body)?;
         let (mut sender, bd) = hyper::Body::channel();
         let req = req_builder.body(bd)?;
         let body = sender.send_data(body);
@@ -160,7 +159,7 @@ impl ClientImpl {
     }
 
     fn build_headers(
-        &self, 
+        &self,
         path: &str,
         req_headers: &mut http::HeaderMap<http::HeaderValue>,
         body: &[u8],
@@ -180,10 +179,9 @@ impl ClientImpl {
     }
 
     async fn build_response<Resp>(
-        &self, 
-        _api: types::Api,
+        &self,
         resp: http::Response<hyper::Body>,
-    ) -> Result<Resp, Error> 
+    ) -> Result<Resp, Error>
     where
         Resp: types::Response + TryFrom<Vec<u8>, Error=Error>,
     {
@@ -231,8 +229,7 @@ impl ClientImpl {
         match status {
             StatusKind::Ok => {
                 let mut resp: Resp = body.try_into()?;
-                resp.set_server_timestamp(server_timestamp);
-                resp.set_request_id(req_id);
+                resp.reset_base(server_timestamp, req_id);
                 Ok(resp)
             }
             StatusKind::ErrorFromService => Err(body.as_slice().try_into()?),
@@ -259,17 +256,14 @@ impl ClientImpl {
 #[derive(Debug)]
 pub(crate) enum Cmd {
     ListTable(
-        types::Api, 
         types::ListTableRequest,
         oneshot::Sender<Result<types::ListTableResponse, Error>>,
     ),
     CreateTable(
-        types::Api,
         types::CreateTableRequest,
         oneshot::Sender<Result<types::CreateTableResponse, Error>>,
     ),
     DeleteTable(
-        types::Api,
         types::DeleteTableRequest,
         oneshot::Sender<Result<types::DeleteTableResponse, Error>>,
     ),
@@ -318,26 +312,26 @@ impl HeaderBuilder<'_> {
 
     fn set_api_version(&mut self) {
         self.raw.insert(
-            HEADER_NAME_API_VERSION, 
+            HEADER_NAME_API_VERSION,
             http::HeaderValue::from_static(HEADER_VALUE_API_VERSION));
         self.ordered.insert(
-            HEADER_NAME_API_VERSION, 
+            HEADER_NAME_API_VERSION,
             Bytes::from_static(HEADER_VALUE_API_VERSION.as_bytes()));
     }
 
     fn set_ak(&mut self, cred: &Credential) -> Result<(), Error> {
         self.raw.insert(
-            HEADER_NAME_ACCESS_KEY_ID, 
+            HEADER_NAME_ACCESS_KEY_ID,
             http::HeaderValue::from_bytes(&cred.id)?);
         self.ordered.insert(
-            HEADER_NAME_ACCESS_KEY_ID, 
+            HEADER_NAME_ACCESS_KEY_ID,
             cred.id.clone());
         if let Some(token) = cred.token.as_ref() {
             self.raw.insert(
-                HEADER_NAME_ACCESS_TOKEN, 
+                HEADER_NAME_ACCESS_TOKEN,
                 http::HeaderValue::from_bytes(token)?);
             self.ordered.insert(
-                HEADER_NAME_INSTANCE_NAME, 
+                HEADER_NAME_INSTANCE_NAME,
                 token.clone());
         }
         Ok(())
@@ -345,26 +339,26 @@ impl HeaderBuilder<'_> {
 
     fn set_instance(&mut self, inst_name: &str) -> Result<(), Error> {
         self.raw.insert(
-            HEADER_NAME_INSTANCE_NAME, 
+            HEADER_NAME_INSTANCE_NAME,
             http::HeaderValue::from_str(inst_name)?);
         self.ordered.insert(
-            HEADER_NAME_INSTANCE_NAME, 
+            HEADER_NAME_INSTANCE_NAME,
             Bytes::copy_from_slice(inst_name.as_bytes()));
         Ok(())
     }
 
     fn set_user_agent(&mut self) {
         self.raw.insert(
-            HEADER_NAME_USER_AGENT, 
+            HEADER_NAME_USER_AGENT,
             http::HeaderValue::from_static(HEADER_VALUE_USER_AGENT));
     }
 
     fn set_content_type(&mut self) {
         self.raw.insert(
-            http::header::CONTENT_TYPE, 
+            http::header::CONTENT_TYPE,
             http::HeaderValue::from_static(HEADER_VALUE_MIME_TYPE));
         self.raw.insert(
-            http::header::ACCEPT, 
+            http::header::ACCEPT,
             http::HeaderValue::from_static(HEADER_VALUE_MIME_TYPE));
     }
 
@@ -373,7 +367,7 @@ impl HeaderBuilder<'_> {
         let tm = Utc.ymd(tm.year(), tm.month(), tm.day()).and_hms_micro(tm.hour(), tm.minute(), tm.second(), tm.nanosecond()/1000);
         let tm = format!("{:?}", tm);
         self.raw.insert(
-            HEADER_NAME_OTS_DATE, 
+            HEADER_NAME_OTS_DATE,
             http::HeaderValue::from_str(&tm)?);
         self.ordered.insert(HEADER_NAME_OTS_DATE, Bytes::from(tm));
         Ok(())
@@ -382,17 +376,17 @@ impl HeaderBuilder<'_> {
     fn set_content_length(&mut self, len: usize) -> Result<(), Error> {
         let len = format!("{}", len);
         self.raw.insert(
-            http::header::CONTENT_LENGTH, 
+            http::header::CONTENT_LENGTH,
             http::HeaderValue::from_str(&len)?);
         Ok(())
     }
 
     fn set_content_md5(&mut self, body_digest: String) -> Result<(), Error> {
         self.raw.insert(
-            HEADER_NAME_CONTENT_MD5, 
+            HEADER_NAME_CONTENT_MD5,
             http::HeaderValue::from_str(&body_digest)?);
         self.ordered.insert(
-            HEADER_NAME_CONTENT_MD5, 
+            HEADER_NAME_CONTENT_MD5,
             Bytes::from(body_digest));
         Ok(())
     }
@@ -411,7 +405,7 @@ impl HeaderBuilder<'_> {
         let signature: crypto::mac::MacResult = hmac.result();
         let signature = base64::encode(signature.code());
         self.raw.insert(
-            HEADER_NAME_SIGNATURE, 
+            HEADER_NAME_SIGNATURE,
             http::HeaderValue::from_str(&signature)?);
         Ok(())
     }

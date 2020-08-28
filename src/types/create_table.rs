@@ -1,12 +1,10 @@
 use bytes::Bytes;
-use chrono::*;
 use crate::Error;
 use crate::protocol as pb;
-use quick_protobuf::{MessageRead, BytesReader, message::MessageWrite};
 use std::convert::TryFrom;
 use super::*;
 
-pub const CREATE_TABLE: &str = "/CreateTable";
+const CREATE_TABLE: &str = "/CreateTable";
 
 #[derive(Debug, Clone)]
 pub struct CreateTableRequest {
@@ -16,7 +14,7 @@ pub struct CreateTableRequest {
 
 #[derive(Debug, Clone)]
 pub struct CreateTableResponse {
-    base: super::BaseResponse,
+    pub base: super::BaseResponse,
 }
 
 impl From<CreateTableRequest> for pb::CreateTableRequest {
@@ -37,48 +35,33 @@ impl From<CreateTableRequest> for pb::CreateTableRequest {
 impl From<pb::CreateTableResponse> for CreateTableResponse {
     fn from(_: pb::CreateTableResponse) -> CreateTableResponse {
         CreateTableResponse{
-            base: super::BaseResponse::default() // FIXME:
+            base: super::BaseResponse::default()
         }
     }
 }
 
 impl From<CreateTableRequest> for Bytes {
     fn from(x: CreateTableRequest) -> Bytes {
-        let req = pb::CreateTableRequest::from(x);
-        let len = req.get_size();
-        let mut body = Vec::new();
-        body.resize(len, 0u8);
-        let writer = quick_protobuf::writer::BytesWriter::new(&mut body);
-        let mut writer = quick_protobuf::writer::Writer::new(writer);
-        req.write_message(&mut writer).unwrap();
-        Bytes::from(body)
+        serialize_request::<CreateTableRequest, pb::CreateTableRequest>(x)
     }
 }
 
 impl TryFrom<Vec<u8>> for CreateTableResponse {
     type Error = Error;
 
-    fn try_from(v: Vec<u8>) -> Result<Self, Self::Error> {
-        let mut reader = BytesReader::from_bytes(&v);
-        let resp = pb::CreateTableResponse::from_reader(&mut reader, &v)?;
-        Ok(resp.into())
+    fn try_from(v: Vec<u8>) -> Result<Self, Error> {
+        new_response::<Self, pb::CreateTableResponse>(&v)
+    }
+}
+
+impl super::Request for CreateTableRequest {
+    fn path(&self) -> &'static str {
+        CREATE_TABLE
     }
 }
 
 impl super::Response for CreateTableResponse {
-    fn set_server_timestamp(&mut self, tm: Option<DateTime<Utc>>) -> () {
-        self.base.server_timestamp = tm;
-    }
-
-    fn get_server_timestamp(&self) -> &Option<DateTime<Utc>> {
-        &self.base.server_timestamp
-    }
-
-    fn set_request_id(&mut self, req_id: Option<String>) -> () {
-        self.base.req_id = req_id;
-    }
-
-    fn get_request_id(&self) -> &Option<String> {
-        &self.base.req_id
+    fn base_mut_ref(&mut self) -> &mut BaseResponse {
+        &mut self.base
     }
 }
