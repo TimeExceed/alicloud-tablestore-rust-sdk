@@ -23,3 +23,5 @@ mod client_impl;
 
 mod client_options;
 pub use client_options::*;
+
+pub(crate) mod plainbuffer;
