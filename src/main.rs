@@ -25,7 +25,7 @@ async fn async_gogogo(
             schema: vec![
                 ots::PkeyColumnSchema{
                     name: "haha".to_string().into(),
-                    type_: ots::PkeyValueType::String,
+                    type_: ots::PkeyValueType::Str,
                 },
             ],
         };

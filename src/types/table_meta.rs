@@ -19,9 +19,9 @@ pub struct PkeyColumnSchema {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PkeyValueType {
-    Integer(PkeyIntTypeOption),
-    String,
-    Binary,
+    Int(PkeyIntTypeOption),
+    Str,
+    Blob,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -63,16 +63,16 @@ impl From<PkeyColumnSchema> for protocol::PrimaryKeySchema {
             option: None,
         };
         match x.type_ {
-            PkeyValueType::Integer(opts) => {
+            PkeyValueType::Int(opts) => {
                 res.type_pb = protocol::PrimaryKeyType::INTEGER;
                 if opts.auto_increment {
                     res.option = Some(protocol::PrimaryKeyOption::AUTO_INCREMENT);
                 }
             }
-            PkeyValueType::String => {
+            PkeyValueType::Str => {
                 res.type_pb = protocol::PrimaryKeyType::STRING;
             }
-            PkeyValueType::Binary => {
+            PkeyValueType::Blob => {
                 res.type_pb = protocol::PrimaryKeyType::BINARY;
             }
         };
@@ -84,7 +84,7 @@ impl From<protocol::PrimaryKeySchema> for PkeyColumnSchema {
     fn from(x: protocol::PrimaryKeySchema) -> Self {
         let mut res = PkeyColumnSchema{
             name: x.name.into(),
-            type_: PkeyValueType::Binary,
+            type_: PkeyValueType::Blob,
         };
         match x.type_pb {
             protocol::PrimaryKeyType::INTEGER => {
@@ -96,13 +96,13 @@ impl From<protocol::PrimaryKeySchema> for PkeyColumnSchema {
                         opts.auto_increment = true;
                     }
                 }
-                res.type_ = PkeyValueType::Integer(opts);
+                res.type_ = PkeyValueType::Int(opts);
             }
             protocol::PrimaryKeyType::STRING => {
-                res.type_ = PkeyValueType::String;
+                res.type_ = PkeyValueType::Str;
             }
             protocol::PrimaryKeyType::BINARY => {
-                res.type_ = PkeyValueType::Binary;
+                res.type_ = PkeyValueType::Blob;
             }
         };
         res
@@ -167,9 +167,9 @@ impl Arbitrary for PkeyValueType {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         let p = u8::arbitrary(g);
         match p % 3 {
-            0 => PkeyValueType::Integer(PkeyIntTypeOption::arbitrary(g)),
-            1 => PkeyValueType::String,
-            2 => PkeyValueType::Binary,
+            0 => PkeyValueType::Int(PkeyIntTypeOption::arbitrary(g)),
+            1 => PkeyValueType::Str,
+            2 => PkeyValueType::Blob,
             _ => unreachable!(),
         }
     }
