@@ -10,10 +10,10 @@ async fn create_delete() -> Result<(), ots::Error> {
     let table_name = "create_delete".to_string();
     {
         let meta = ots::TableMeta{
-            name: table_name.clone(),
+            name: table_name.clone().into(),
             schema: vec![
                 ots::PkeyColumnSchema{
-                    name: "haha".to_string(),
+                    name: "haha".to_string().into(),
                     type_: ots::PkeyValueType::String,
                 }
             ]
@@ -38,7 +38,7 @@ async fn create_delete() -> Result<(), ots::Error> {
                 x == &table_name
             })
     };
-    
+
     assert_eq!((should_in, should_not_in), (true, false));
     Ok(())
 }

@@ -1,18 +1,19 @@
 use crate::protocol;
 use std::convert::From;
+use super::*;
 
 #[cfg(test)]
 use quickcheck::{Arbitrary, Gen};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TableMeta {
-    pub name: String,
+    pub name: Name,
     pub schema: Vec<PkeyColumnSchema>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PkeyColumnSchema {
-    pub name: String,
+    pub name: Name,
     pub type_: PkeyValueType,
 }
 
@@ -31,7 +32,7 @@ pub struct PkeyIntTypeOption {
 impl From<protocol::TableMeta> for TableMeta {
     fn from(x: protocol::TableMeta) -> Self {
         TableMeta{
-            name: x.table_name,
+            name: x.table_name.into(),
             schema: x.primary_key.iter()
                 .map(|x| {
                     PkeyColumnSchema::from(x.clone())
@@ -44,7 +45,7 @@ impl From<protocol::TableMeta> for TableMeta {
 impl From<TableMeta> for protocol::TableMeta {
     fn from(x: TableMeta) -> protocol::TableMeta {
         protocol::TableMeta{
-            table_name: x.name,
+            table_name: x.name.into(),
             primary_key: x.schema.iter()
                 .map(|x| {
                     protocol::PrimaryKeySchema::from(x.clone())
@@ -57,7 +58,7 @@ impl From<TableMeta> for protocol::TableMeta {
 impl From<PkeyColumnSchema> for protocol::PrimaryKeySchema {
     fn from(x: PkeyColumnSchema) -> Self {
         let mut res = protocol::PrimaryKeySchema{
-            name: x.name,
+            name: x.name.into(),
             type_pb: protocol::PrimaryKeyType::INTEGER,
             option: None,
         };
@@ -82,7 +83,7 @@ impl From<PkeyColumnSchema> for protocol::PrimaryKeySchema {
 impl From<protocol::PrimaryKeySchema> for PkeyColumnSchema {
     fn from(x: protocol::PrimaryKeySchema) -> Self {
         let mut res = PkeyColumnSchema{
-            name: x.name,
+            name: x.name.into(),
             type_: PkeyValueType::Binary,
         };
         match x.type_pb {
@@ -113,7 +114,7 @@ impl From<protocol::PrimaryKeySchema> for PkeyColumnSchema {
 impl Arbitrary for TableMeta {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         Self{
-            name: String::arbitrary(g),
+            name: Name::arbitrary(g),
             schema: Vec::<PkeyColumnSchema>::arbitrary(g),
         }
     }
@@ -143,7 +144,7 @@ impl Arbitrary for TableMeta {
 impl Arbitrary for PkeyColumnSchema {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         Self{
-            name: String::arbitrary(g),
+            name: Name::arbitrary(g),
             type_: PkeyValueType::arbitrary(g),
         }
     }

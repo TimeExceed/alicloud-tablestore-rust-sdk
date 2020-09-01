@@ -21,10 +21,10 @@ async fn async_gogogo(
     let client = ots::Client::new(ep, cred, opts)?;
     {
         let meta = ots::TableMeta{
-            name: "Smile".to_string(),
+            name: "Smile".to_string().into(),
             schema: vec![
                 ots::PkeyColumnSchema{
-                    name: "haha".to_string(),
+                    name: "haha".to_string().into(),
                     type_: ots::PkeyValueType::String,
                 },
             ],
