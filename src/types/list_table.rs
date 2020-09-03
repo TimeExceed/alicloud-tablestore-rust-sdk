@@ -4,8 +4,6 @@ use crate::protocol as pb;
 use std::convert::TryFrom;
 use super::*;
 
-const LIST_TABLE: &str = "/ListTable";
-
 #[derive(Debug, Clone, Default)]
 pub struct ListTableRequest {}
 
@@ -45,8 +43,12 @@ impl TryFrom<Vec<u8>> for ListTableResponse {
 }
 
 impl super::Request for ListTableRequest {
-    fn path(&self) -> &'static str {
-        LIST_TABLE
+    fn action(&self) -> Action {
+        Action::ListTable
+    }
+
+    fn path(&self) -> String {
+        self.action().to_string()
     }
 }
 

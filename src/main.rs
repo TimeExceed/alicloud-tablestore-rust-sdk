@@ -13,18 +13,44 @@ fn try_me<T>(v: Result<T, std::env::VarError>) -> Result<T, ots::Error> {
     }
 }
 
+struct TableFinalizer {
+    client: ots::Client,
+    name: String,
+}
+
+impl TableFinalizer {
+    fn new(client: ots::Client, name: String) -> TableFinalizer {
+        TableFinalizer{
+            client,
+            name,
+        }
+    }
+}
+
+impl Drop for TableFinalizer {
+    fn drop(&mut self) {
+        let name = self.name.clone();
+        let client = self.client.clone();
+        tokio::spawn(async move {
+            client.delete_table(name).await.unwrap();
+        });
+    }
+}
+
 async fn async_gogogo(
     ep: ots::Endpoint,
     cred: ots::Credential,
 ) -> Result<(), ots::Error> {
     let opts = ots::ClientOptions::default();
     let client = ots::Client::new(ep, cred, opts)?;
+    let table_name = "Smile".to_string();
+    let _x = TableFinalizer::new(client.clone(), table_name.clone());
     {
         let meta = ots::TableMeta{
-            name: "Smile".to_string().into(),
+            name: table_name.clone().into(),
             schema: vec![
                 ots::PkeyColumnSchema{
-                    name: "haha".to_string().into(),
+                    name: "pkey".to_string().into(),
                     type_: ots::PkeyValueType::Str,
                 },
             ],
@@ -33,19 +59,21 @@ async fn async_gogogo(
         let _resp = client.create_table(meta, opts).await?;
     }
     {
-        let resp = client.list_table().await?;
-        for t in resp.tables.iter() {
-            println!("table: {}", t);
-        }
-    }
-    {
-        let _resp = client.delete_table("Smile".to_string()).await?;
-    }
-    {
-        let resp = client.list_table().await?;
-        for t in resp.tables.iter() {
-            println!("table: {}", t);
-        }
+        let row = ots::Row{
+            row_key: ots::RowKey(vec![ots::RowKeyColumn{
+                name: "pkey".to_string().into(),
+                value: ots::RowKeyValue::Str("exist".to_string()),
+            }]),
+            attrs: vec![
+                ots::Attribute{
+                    name: "attr".to_string().into(),
+                    value: ots::AttrValue::Int(123),
+                    timestamp: ots::AttrTimestamp::ClientAttach(ots::DateTime::now()),
+                }
+            ],
+        };
+        let resp = client.put_row(table_name.clone(), row).await?;
+        println!("put row ok: {:?}", resp);
     }
     Ok(())
 }

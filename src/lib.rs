@@ -1,6 +1,7 @@
 #[cfg(test)]
 #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
+#[macro_use]
 extern crate log;
 
 pub mod error;
@@ -22,6 +23,9 @@ mod protocol;
 mod client_impl;
 
 mod client_options;
-pub use client_options::*;
+pub use self::client_options::*;
 
 pub(crate) mod plainbuffer;
+
+mod retry;
+pub use self::retry::*;

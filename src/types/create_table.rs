@@ -4,8 +4,6 @@ use crate::protocol as pb;
 use std::convert::TryFrom;
 use super::*;
 
-const CREATE_TABLE: &str = "/CreateTable";
-
 #[derive(Debug, Clone)]
 pub struct CreateTableRequest {
     pub table_meta: TableMeta,
@@ -55,8 +53,12 @@ impl TryFrom<Vec<u8>> for CreateTableResponse {
 }
 
 impl super::Request for CreateTableRequest {
-    fn path(&self) -> &'static str {
-        CREATE_TABLE
+    fn action(&self) -> Action {
+        Action::CreateTable
+    }
+
+    fn path(&self) -> String {
+        self.action().to_string()
     }
 }
 

@@ -1,10 +1,10 @@
 use bytes::Bytes;
-use chrono::*;
 use crate::Error;
 use quick_protobuf::{MessageRead, BytesReader, message::MessageWrite};
 
 pub trait Request {
-    fn path(&self) -> &'static str;
+    fn action(&self) -> Action;
+    fn path(&self) -> String;
 }
 
 pub(crate) trait Response {
@@ -12,7 +12,7 @@ pub(crate) trait Response {
 
     fn reset_base(
         &mut self,
-        server_tm: Option<DateTime<Utc>>,
+        server_tm: Option<chrono::DateTime<chrono::Utc>>,
         req_id: Option<String>,
     ) {
         self.base_mut_ref().server_timestamp = server_tm;
@@ -51,7 +51,7 @@ where
 
 #[derive(Debug, Clone)]
 pub struct BaseResponse {
-    pub server_timestamp: Option<DateTime<Utc>>,
+    pub server_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     pub req_id: Option<String>,
 }
 
@@ -66,6 +66,8 @@ impl Default for BaseResponse {
 
 mod common;
 pub use self::common::*;
+mod action;
+pub use self::action::*;
 mod table_meta;
 pub use self::table_meta::*;
 mod table_options;
@@ -76,3 +78,15 @@ mod create_table;
 pub use self::create_table::*;
 mod delete_table;
 pub use self::delete_table::*;
+mod rowkey;
+pub use self::rowkey::*;
+mod attr;
+pub use self::attr::*;
+mod row;
+pub use self::row::*;
+mod put_row;
+pub use self::put_row::*;
+mod condition;
+pub use self::condition::*;
+mod in_return;
+pub use self::in_return::*;
