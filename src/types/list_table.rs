@@ -1,28 +1,28 @@
 use bytes::Bytes;
-use chrono::*;
 use crate::Error;
-use crate::protocol;
-use quick_protobuf::{MessageRead, BytesReader, message::MessageWrite};
+use crate::protocol as pb;
 use std::convert::TryFrom;
+use super::*;
 
-pub const LIST_TABLE: &str = "/ListTable";
+const LIST_TABLE: &str = "/ListTable";
 
 #[derive(Debug, Clone, Default)]
 pub struct ListTableRequest {}
+
 #[derive(Debug, Clone)]
 pub struct ListTableResponse {
-    base: super::BaseResponse,
+    pub base: super::BaseResponse,
     pub tables: Vec<String>,
 }
 
-impl Into<protocol::ListTableRequest> for ListTableRequest {
-    fn into(self) -> protocol::ListTableRequest {
-        protocol::ListTableRequest{}
+impl From<ListTableRequest> for pb::ListTableRequest {
+    fn from(_: ListTableRequest) -> pb::ListTableRequest {
+        pb::ListTableRequest{}
     }
 }
 
-impl From<crate::protocol::ListTableResponse> for ListTableResponse {
-    fn from(x: crate::protocol::ListTableResponse) -> ListTableResponse {
+impl From<pb::ListTableResponse> for ListTableResponse {
+    fn from(x: pb::ListTableResponse) -> ListTableResponse {
         ListTableResponse{
             base: super::BaseResponse::default(),
             tables: x.table_names,
@@ -30,42 +30,28 @@ impl From<crate::protocol::ListTableResponse> for ListTableResponse {
     }
 }
 
-impl Into<Bytes> for ListTableRequest {
-    fn into(self) -> Bytes {
-        let req: protocol::ListTableRequest = self.into();
-        let mut body = Vec::with_capacity(req.get_size());
-        if req.get_size() > 0 {
-            let mut writer = quick_protobuf::writer::Writer::new(&mut body);
-            writer.write_message(&req).unwrap();
-        }
-        Bytes::from(body)
+impl From<ListTableRequest> for Bytes {
+    fn from(x: ListTableRequest) -> Bytes {
+        serialize_request::<ListTableRequest, pb::ListTableRequest>(x)
     }
 }
 
 impl TryFrom<Vec<u8>> for ListTableResponse {
     type Error = Error;
 
-    fn try_from(v: Vec<u8>) -> Result<Self, Self::Error> {
-        let mut reader = BytesReader::from_bytes(&v);
-        let resp = protocol::ListTableResponse::from_reader(&mut reader, &v)?;
-        Ok(resp.into())
+    fn try_from(v: Vec<u8>) -> Result<Self, Error> {
+        super::new_response::<Self, pb::ListTableResponse>(&v)
+    }
+}
+
+impl super::Request for ListTableRequest {
+    fn path(&self) -> &'static str {
+        LIST_TABLE
     }
 }
 
 impl super::Response for ListTableResponse {
-    fn set_server_timestamp(&mut self, tm: Option<DateTime<Utc>>) -> () {
-        self.base.server_timestamp = tm;
-    }
-
-    fn get_server_timestamp(&self) -> &Option<DateTime<Utc>> {
-        &self.base.server_timestamp
-    }
-
-    fn set_request_id(&mut self, req_id: Option<String>) -> () {
-        self.base.req_id = req_id;
-    }
-
-    fn get_request_id(&self) -> &Option<String> {
-        &self.base.req_id
+    fn base_mut_ref(&mut self) -> &mut BaseResponse {
+        &mut self.base
     }
 }

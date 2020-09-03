@@ -10,7 +10,7 @@ pub struct Client {
 
 impl Client {
     pub fn new(
-        endpoint: Endpoint, 
+        endpoint: Endpoint,
         credential: Credential,
         opts: ClientOptions,
     ) -> Result<Client, Error> {
@@ -24,12 +24,38 @@ impl Client {
     pub async fn list_table(&self) -> Result<types::ListTableResponse, Error> {
         debug!("Issue ListTable");
         let req = types::ListTableRequest{};
-        let api = types::Api::new(types::LIST_TABLE);
         let (tx, rx) = oneshot::channel();
-        let cmd = client_impl::Cmd::ListTable(api, req, tx);
+        let cmd = client_impl::Cmd::ListTable(req, tx);
         self.cmd_sender.clone().send(cmd).await.unwrap();
         rx.await.unwrap()
     }
 
+    pub async fn create_table(
+        &self,
+        table_meta: types::TableMeta,
+        options: types::TableOptions,
+    ) -> Result<types::CreateTableResponse, Error> {
+        let req = types::CreateTableRequest{
+            table_meta,
+            options,
+        };
+        let (tx, rx) = oneshot::channel();
+        let cmd = client_impl::Cmd::CreateTable(req, tx);
+        self.cmd_sender.clone().send(cmd).await.unwrap();
+        rx.await.unwrap()
+    }
+
+    pub async fn delete_table(
+        &self,
+        name: String,
+    ) -> Result<types::DeleteTableResponse, Error> {
+        let req = types::DeleteTableRequest{
+            name,
+        };
+        let (tx, rx) = oneshot::channel();
+        let cmd = client_impl::Cmd::DeleteTable(req, tx);
+        self.cmd_sender.clone().send(cmd).await.unwrap();
+        rx.await.unwrap()
+    }
 }
 

@@ -1,3 +1,8 @@
+#[cfg(test)]
+#[macro_use(quickcheck)]
+extern crate quickcheck_macros;
+extern crate log;
+
 pub mod error;
 pub use self::error::{Error, ErrorCode};
 
@@ -18,3 +23,5 @@ mod client_impl;
 
 mod client_options;
 pub use client_options::*;
+
+pub(crate) mod plainbuffer;
