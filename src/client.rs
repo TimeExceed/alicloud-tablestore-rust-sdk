@@ -32,25 +32,20 @@ impl Client {
 
     pub async fn create_table(
         &self,
-        table_meta: types::TableMeta,
-        options: types::TableOptions,
+        req: types::CreateTableRequest,
     ) -> Result<types::CreateTableResponse, Error> {
-        let req = types::CreateTableRequest{
-            table_meta,
-            options,
-        };
         let (tx, rx) = oneshot::channel();
         let cmd = client_impl::Cmd::CreateTable(req, tx);
         self.cmd_sender.clone().send(cmd).await.unwrap();
         rx.await.unwrap()
     }
 
-    pub async fn delete_table(
+    pub async fn delete_table<T: ToString>(
         &self,
-        name: String,
+        name: T,
     ) -> Result<types::DeleteTableResponse, Error> {
         let req = types::DeleteTableRequest{
-            name,
+            name: types::Name::new(name),
         };
         let (tx, rx) = oneshot::channel();
         let cmd = client_impl::Cmd::DeleteTable(req, tx);
@@ -60,17 +55,8 @@ impl Client {
 
     pub async fn put_row(
         &self,
-        table_name: String,
-        row: types::Row,
+        req: types::PutRowRequest,
     ) -> Result<types::PutRowResponse, Error> {
-        let req = types::PutRowRequest{
-            table_name,
-            row,
-            condition: types::Condition{
-                row_exist: types::RowExistenceExpectation::Ignore,
-            },
-            in_return: types::InReturn::Nothing,
-        };
         let (tx, rx) = oneshot::channel();
         let cmd = client_impl::Cmd::PutRow(req, tx);
         self.cmd_sender.clone().send(cmd).await.unwrap();

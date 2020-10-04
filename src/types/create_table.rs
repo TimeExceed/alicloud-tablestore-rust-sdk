@@ -10,6 +10,15 @@ pub struct CreateTableRequest {
     pub options: TableOptions,
 }
 
+impl CreateTableRequest {
+    pub fn new(table_meta: TableMeta) -> Self {
+        Self{
+            table_meta,
+            options: TableOptions::default_for_create(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CreateTableResponse {
     pub base: super::BaseResponse,

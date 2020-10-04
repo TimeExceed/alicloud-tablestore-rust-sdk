@@ -4,9 +4,9 @@ use crate::protocol as pb;
 use std::convert::TryFrom;
 use super::*;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct DeleteTableRequest {
-    pub name: String,
+    pub name: Name,
 }
 
 #[derive(Debug, Clone)]
@@ -17,7 +17,7 @@ pub struct DeleteTableResponse {
 impl From<DeleteTableRequest> for pb::DeleteTableRequest {
     fn from(x: DeleteTableRequest) -> pb::DeleteTableRequest {
         pb::DeleteTableRequest{
-            table_name: x.name,
+            table_name: x.name.into(),
         }
     }
 }
