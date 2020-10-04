@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use tablestore as ots;
 
 fn try_me<T>(v: Result<T, std::env::VarError>) -> Result<T, ots::Error> {
@@ -21,30 +22,30 @@ async fn async_gogogo(
     let client = ots::Client::new(ep, cred, opts)?;
     {
         let meta = ots::TableMeta{
-            name: "Smile".to_string().into(),
+            name: ots::Name::new("Smile"),
             schema: vec![
                 ots::PkeyColumnSchema{
-                    name: "haha".to_string().into(),
+                    name: ots::Name::new("haha"),
                     type_: ots::PkeyValueType::Str,
                 },
             ],
         };
-        let opts = ots::TableOptions::default_for_create();
-        let _resp = client.create_table(meta, opts).await?;
+        let req = ots::CreateTableRequest::new(meta);
+        let _resp = client.create_table(req).await?;
     }
     {
         let resp = client.list_table().await?;
         for t in resp.tables.iter() {
-            println!("table: {}", t);
+            println!("table: {}", <&str>::from(t));
         }
     }
     {
-        let _resp = client.delete_table("Smile".to_string()).await?;
+        let _resp = client.delete_table("Smile").await?;
     }
     {
         let resp = client.list_table().await?;
         for t in resp.tables.iter() {
-            println!("table: {}", t);
+            println!("table: {}", <&str>::from(t));
         }
     }
     Ok(())

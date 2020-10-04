@@ -1,3 +1,4 @@
+use std::convert::TryInto;
 use tablestore as ots;
 mod utils;
 use utils::*;
@@ -13,13 +14,13 @@ async fn create_delete() -> Result<(), ots::Error> {
             name: table_name.clone().into(),
             schema: vec![
                 ots::PkeyColumnSchema{
-                    name: "haha".to_string().into(),
+                    name: ots::Name::new("haha"),
                     type_: ots::PkeyValueType::Str,
                 }
             ]
         };
-        let opts = ots::TableOptions::default_for_create();
-        let _resp = client.create_table(meta, opts).await?;
+        let req = ots::CreateTableRequest::new(meta);
+        let _resp = client.create_table(req).await?;
     }
     let should_in = {
         let resp = client.list_table().await?;

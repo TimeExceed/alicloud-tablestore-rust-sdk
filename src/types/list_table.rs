@@ -10,7 +10,7 @@ pub struct ListTableRequest {}
 #[derive(Debug, Clone)]
 pub struct ListTableResponse {
     pub base: super::BaseResponse,
-    pub tables: Vec<String>,
+    pub tables: Vec<Name>,
 }
 
 impl From<ListTableRequest> for pb::ListTableRequest {
@@ -23,7 +23,12 @@ impl From<pb::ListTableResponse> for ListTableResponse {
     fn from(x: pb::ListTableResponse) -> ListTableResponse {
         ListTableResponse{
             base: super::BaseResponse::default(),
-            tables: x.table_names,
+            tables: x.table_names
+                .into_iter()
+                .map(|x| {
+                    x.into()
+                })
+                .collect(),
         }
     }
 }

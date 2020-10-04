@@ -2,15 +2,28 @@ use bytes::Bytes;
 use crate::Error;
 use crate::protocol as pb;
 use crate::plainbuffer::PbufSerde;
-use std::convert::TryFrom;
+use std::convert::{TryFrom};
 use super::*;
 
 #[derive(Debug, Clone)]
 pub struct PutRowRequest {
-    pub table_name: String,
+    pub table_name: Name,
     pub row: Row,
     pub condition: Condition,
     pub in_return: InReturn,
+}
+
+impl PutRowRequest {
+    pub fn new<T: ToString>(table_name: T, row: Row) -> Result<Self, Error> {
+        Ok(Self{
+            table_name: Name::new(table_name),
+            row,
+            condition: Condition{
+                row_exist: RowExistenceExpectation::Ignore,
+            },
+            in_return: InReturn::Nothing,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -21,7 +34,7 @@ pub struct PutRowResponse {
 impl From<PutRowRequest> for pb::PutRowRequest {
     fn from(x: PutRowRequest) -> pb::PutRowRequest {
         pb::PutRowRequest{
-            table_name: x.table_name,
+            table_name: x.table_name.into(),
             row: x.row.to_pbuf(),
             condition: x.condition.into(),
             return_content: Some(x.in_return.into()),

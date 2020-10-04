@@ -32,7 +32,7 @@ impl Drop for TableFinalizer {
         let name = self.name.clone();
         let client = self.client.clone();
         tokio::spawn(async move {
-            client.delete_table(name).await.unwrap();
+            client.delete_table(&name).await.unwrap();
         });
     }
 }
@@ -50,29 +50,30 @@ async fn async_gogogo(
             name: table_name.clone().into(),
             schema: vec![
                 ots::PkeyColumnSchema{
-                    name: "pkey".to_string().into(),
+                    name: ots::Name::new("pkey"),
                     type_: ots::PkeyValueType::Str,
                 },
             ],
         };
-        let opts = ots::TableOptions::default_for_create();
-        let _resp = client.create_table(meta, opts).await?;
+        let req = ots::CreateTableRequest::new(meta);
+        let _resp = client.create_table(req).await?;
     }
     {
         let row = ots::Row{
             row_key: ots::RowKey(vec![ots::RowKeyColumn{
-                name: "pkey".to_string().into(),
+                name: ots::Name::new("pkey"),
                 value: ots::RowKeyValue::Str("exist".to_string()),
             }]),
             attrs: vec![
                 ots::Attribute{
-                    name: "attr".to_string().into(),
+                    name: ots::Name::new("attr"),
                     value: ots::AttrValue::Int(123),
                     timestamp: ots::AttrTimestamp::ClientAttach(ots::DateTime::now()),
                 }
             ],
         };
-        let resp = client.put_row(table_name.clone(), row).await?;
+        let req = ots::PutRowRequest::new(table_name, row)?;
+        let resp = client.put_row(req).await?;
         println!("put row ok: {:?}", resp);
     }
     Ok(())

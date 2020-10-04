@@ -235,7 +235,7 @@ impl SerdeWithCrc8 for String {
 impl SerdeWithCrc8 for Name {
     fn serialize_crc8(&self, out: &mut dyn BufMut, checksum: &mut u8) {
         super::Tag::CellName.serialize(out);
-        let name = <&String>::from(self);
+        let name = <&str>::from(self);
         let name = name.as_bytes();
         name.serialize(out);
         super::crc8_blob(checksum, name);
@@ -250,13 +250,7 @@ impl SerdeWithCrc8 for Name {
         }
         let res = String::deserialize(inp)?;
         super::crc8_blob(checksum, res.as_bytes());
-        match Name::new(res) {
-            Err(mut e) => {
-                e.code = ErrorCode::CorruptedResponse;
-                Err(e)
-            }
-            x => x,
-        }
+        Ok(res.into())
     }
 }
 

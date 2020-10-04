@@ -68,6 +68,8 @@ mod common;
 pub use self::common::*;
 mod action;
 pub use self::action::*;
+mod name;
+pub use self::name::*;
 mod table_meta;
 pub use self::table_meta::*;
 mod table_options;
