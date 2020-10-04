@@ -57,5 +57,24 @@ impl Client {
         self.cmd_sender.clone().send(cmd).await.unwrap();
         rx.await.unwrap()
     }
+
+    pub async fn put_row(
+        &self,
+        table_name: String,
+        row: types::Row,
+    ) -> Result<types::PutRowResponse, Error> {
+        let req = types::PutRowRequest{
+            table_name,
+            row,
+            condition: types::Condition{
+                row_exist: types::RowExistenceExpectation::Ignore,
+            },
+            in_return: types::InReturn::Nothing,
+        };
+        let (tx, rx) = oneshot::channel();
+        let cmd = client_impl::Cmd::PutRow(req, tx);
+        self.cmd_sender.clone().send(cmd).await.unwrap();
+        rx.await.unwrap()
+    }
 }
 

@@ -4,8 +4,6 @@ use crate::protocol as pb;
 use std::convert::TryFrom;
 use super::*;
 
-const DELETE_TABLE: &str = "/DeleteTable";
-
 #[derive(Debug, Clone, Default)]
 pub struct DeleteTableRequest {
     pub name: String,
@@ -47,8 +45,12 @@ impl TryFrom<Vec<u8>> for DeleteTableResponse {
 }
 
 impl super::Request for DeleteTableRequest {
-    fn path(&self) -> &'static str {
-        DELETE_TABLE
+    fn action(&self) -> Action {
+        Action::DeleteTable
+    }
+
+    fn path(&self) -> String {
+        self.action().to_string()
     }
 }
 

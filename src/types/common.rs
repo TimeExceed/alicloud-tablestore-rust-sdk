@@ -1,3 +1,4 @@
+use crate::{Error, ErrorCode};
 #[cfg(test)]
 use quickcheck::{Arbitrary, Gen};
 
@@ -11,6 +12,21 @@ pub enum SettableValue<V>{
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Name(String);
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct DateTime(chrono::DateTime<chrono::Utc>);
+
+impl Name {
+    pub fn new(name: String) -> Result<Name, Error> {
+        if name.is_empty() {
+            return Err(Error{
+                code: ErrorCode::ClientUnknown,
+                message: "Name is required not to be empty.".to_string(),
+            })
+        }
+        Ok(Name(name))
+    }
+}
+
 impl From<String> for Name {
     fn from(x: String) -> Name {
         Name(x)
@@ -23,27 +39,33 @@ impl From<Name> for String {
     }
 }
 
+impl<'a> From<&'a Name> for &'a String {
+    fn from(x: &'a Name) -> &'a String {
+        &x.0
+    }
+}
+
 #[cfg(test)]
 impl Arbitrary for Name {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         const ALPHABET: [char; 8] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', '.'];
         const STOPPER: char = '.';
-        let mut res = String::new();
         loop {
-            let x = random_pick(g, &ALPHABET);
-            if x != STOPPER {
+            let mut res = String::new();
+            loop {
+                let x = random_pick(g, &ALPHABET);
+                if x == STOPPER {
+                    break;
+                }
                 res.push(x);
-                break;
+            }
+            match Name::new(res) {
+                Ok(x) => {
+                    return x;
+                }
+                Err(_) => {}
             }
         }
-        loop {
-            let x = random_pick(g, &ALPHABET);
-            if x == STOPPER {
-                break;
-            }
-            res.push(x);
-        }
-        Self(res)
     }
 
     fn shrink(&self) -> Box<dyn Iterator<Item = Self>> {
@@ -108,5 +130,28 @@ impl Iterator for NameShrinker {
                 Some(Name(res))
             }
         }
+    }
+}
+
+impl DateTime {
+    pub fn now() -> DateTime {
+        let tm = chrono::Utc::now();
+        let millis = tm.timestamp_millis();
+        let secs = millis / 1000;
+        let subsecs = (millis % 1000 * 1000_000) as u32;
+        let tm = chrono::NaiveDateTime::from_timestamp(secs, subsecs);
+        DateTime(chrono::DateTime::from_utc(tm, chrono::Utc))
+    }
+
+    pub fn to_millis(&self) -> i64 {
+        self.0.timestamp_millis()
+    }
+
+    pub fn from_millis(millis: i64) -> DateTime {
+        let secs = millis / 1000;
+        let nsecs = millis % 1000 * 1000_000;
+        let nsecs = nsecs as u32;
+        let tm = chrono::NaiveDateTime::from_timestamp(secs, nsecs);
+        DateTime(chrono::DateTime::from_utc(tm, chrono::Utc))
     }
 }

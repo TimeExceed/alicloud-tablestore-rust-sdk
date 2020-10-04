@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, oneshot};
 pub(crate) struct ClientImpl {
     endpoint: Endpoint,
     credential: Credential,
-    client_opts: ClientOptions,
+    opts: ClientOptions,
     http_clients: hyper::Client<hyper::client::HttpConnector<hyper::client::connect::dns::GaiResolver>, hyper::Body>,
 }
 
@@ -22,13 +22,13 @@ impl ClientImpl {
     pub(crate) fn new(
         endpoint: Endpoint,
         credential: Credential,
-        client_opts: ClientOptions,
+        opts: ClientOptions,
     ) -> mpsc::Sender<Cmd> {
         let (tx, rx) = mpsc::channel(1);
         let client = ClientImpl{
             endpoint,
             credential,
-            client_opts,
+            opts,
             http_clients: hyper::Client::new(),
         };
         tokio::spawn(client.run(rx));
@@ -36,7 +36,7 @@ impl ClientImpl {
     }
 
     async fn run(self, mut cmd_recv: mpsc::Receiver<Cmd>) {
-        let concurrency = AtomicI64::new(self.client_opts.concurrency);
+        let concurrency = AtomicI64::new(self.opts.concurrency);
         while let Some(cmd) = cmd_recv.recv().await {
             match cmd {
                 Cmd::ListTable(req, resp_tx) => {
@@ -46,6 +46,9 @@ impl ClientImpl {
                     self.async_issue(req, resp_tx, &concurrency);
                 }
                 Cmd::DeleteTable(req, resp_tx) => {
+                    self.async_issue(req, resp_tx, &concurrency);
+                }
+                Cmd::PutRow(req, resp_tx) => {
                     self.async_issue(req, resp_tx, &concurrency);
                 }
             }
@@ -59,7 +62,7 @@ impl ClientImpl {
         concurrency: &AtomicI64,
     ) -> ()
     where
-        Req: 'static + types::Request + Into<Bytes> + Send + std::fmt::Debug,
+        Req: 'static + types::Request + Clone + Into<Bytes> + Send + Sync + std::fmt::Debug,
         Resp: 'static + types::Response + TryFrom<Vec<u8>, Error=Error> + std::fmt::Debug + Send,
     {
         let atom = match AtomicWrap::try_new(concurrency) {
@@ -74,7 +77,30 @@ impl ClientImpl {
         let client = self.clone();
         tokio::spawn(async move {
             let _atom = atom;
-            let resp = client.issue(req).await;
+            let mut retry = client.opts.retry_strategy.clone();
+            let resp = loop {
+                let resp = client.issue(req.clone()).await;
+                match resp {
+                    Ok(_) => {
+                        break resp;
+                    }
+                    Err(err) => {
+                        match retry.next_pause(req.action(), &err) {
+                            None => {
+                                break Err(err);
+                            }
+                            Some(dur) => {
+                                info!("Retriable error occurs.\
+                                    \terror={:?}\
+                                    \tdelay={:?}",
+                                    err,
+                                    dur);
+                                tokio::time::delay_for(dur).await;
+                            }
+                        }
+                    }
+                }
+            };
             resp_tx.send(resp).unwrap()
         });
     }
@@ -148,7 +174,7 @@ impl ClientImpl {
             .uri(url);
         let body: Bytes = req.into();
         debug!("body: {:?}", body);
-        self.build_headers(path, req_builder.headers_mut().unwrap(), &body)?;
+        self.build_headers(&path, req_builder.headers_mut().unwrap(), &body)?;
         let (mut sender, bd) = hyper::Body::channel();
         let req = req_builder.body(bd)?;
         let body = sender.send_data(body);
@@ -226,6 +252,7 @@ impl ClientImpl {
                 });
             }
         }
+        debug!("new response: {:?}", Bytes::copy_from_slice(&body));
         match status {
             StatusKind::Ok => {
                 let mut resp: Resp = body.try_into()?;
@@ -266,6 +293,10 @@ pub(crate) enum Cmd {
     DeleteTable(
         types::DeleteTableRequest,
         oneshot::Sender<Result<types::DeleteTableResponse, Error>>,
+    ),
+    PutRow(
+        types::PutRowRequest,
+        oneshot::Sender<Result<types::PutRowResponse, Error>>,
     ),
 }
 
