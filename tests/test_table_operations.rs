@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use tablestore as ots;
 mod utils;
 use utils::*;

@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use tablestore as ots;
 
 fn try_me<T>(v: Result<T, std::env::VarError>) -> Result<T, ots::Error> {
