@@ -7,6 +7,7 @@ use log::*;
 use std::collections::BTreeMap;
 use std::convert::{TryFrom, TryInto};
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::Arc;
 use tokio::stream::StreamExt;
 use tokio::sync::{mpsc, oneshot};
 
@@ -36,20 +37,20 @@ impl ClientImpl {
     }
 
     async fn run(self, mut cmd_recv: mpsc::Receiver<Cmd>) {
-        let concurrency = AtomicI64::new(self.opts.concurrency);
+        let mut concurrency = Concurrency::new(self.opts.concurrency);
         while let Some(cmd) = cmd_recv.recv().await {
             match cmd {
                 Cmd::ListTable(req, resp_tx) => {
-                    self.async_issue(req, resp_tx, &concurrency);
+                    self.async_issue(req, resp_tx, &mut concurrency);
                 }
                 Cmd::CreateTable(req, resp_tx) => {
-                    self.async_issue(req, resp_tx, &concurrency);
+                    self.async_issue(req, resp_tx, &mut concurrency);
                 }
                 Cmd::DeleteTable(req, resp_tx) => {
-                    self.async_issue(req, resp_tx, &concurrency);
+                    self.async_issue(req, resp_tx, &mut concurrency);
                 }
                 Cmd::PutRow(req, resp_tx) => {
-                    self.async_issue(req, resp_tx, &concurrency);
+                    self.async_issue(req, resp_tx, &mut concurrency);
                 }
             }
         }
@@ -59,13 +60,13 @@ impl ClientImpl {
         &self,
         req: Req,
         resp_tx: oneshot::Sender<Result<Resp, Error>>,
-        concurrency: &AtomicI64,
+        concurrency: &mut Concurrency,
     ) -> ()
     where
         Req: 'static + types::Request + Clone + Into<Bytes> + Send + Sync + std::fmt::Debug,
         Resp: 'static + types::Response + TryFrom<Vec<u8>, Error=Error> + std::fmt::Debug + Send,
     {
-        let atom = match AtomicWrap::try_new(concurrency) {
+        let atom = match concurrency.borrow() {
             Ok(x) => x,
             Err(mut err) => {
                 info!("Too many concurrent requests.");
@@ -451,32 +452,33 @@ fn content_md5(body: &[u8]) -> Result<String, Error> {
     Ok(digest)
 }
 
-struct AtomicWrap(*const AtomicI64);
+struct Concurrency(Arc<AtomicI64>);
 
-unsafe impl Send for AtomicWrap {}
+struct ConcurrencyBorrower(Arc<AtomicI64>);
 
-impl AtomicWrap {
-    fn try_new(v: &AtomicI64) -> Result<AtomicWrap, Error> {
-        let c = v.fetch_sub(1, Ordering::Acquire);
+impl Concurrency {
+    fn new(slots: i64) -> Concurrency {
+        Concurrency(Arc::new(AtomicI64::new(slots)))
+    }
+
+    fn borrow(&mut self) -> Result<ConcurrencyBorrower, Error> {
+        let c = self.0.fetch_sub(1, Ordering::Acquire);
         debug!("concurrency before acquiring: {}", c);
         if c <= 0 {
-            v.fetch_add(1, Ordering::Release);
+            self.0.fetch_add(1, Ordering::Release);
             let err = Error{
                 code: ErrorCode::NoAvailableConnection,
                 message: String::new(),
             };
             return Err(err);
         }
-        Ok(Self(v))
+        Ok(ConcurrencyBorrower(self.0.clone()))
     }
 }
 
-impl Drop for AtomicWrap {
+impl Drop for ConcurrencyBorrower {
     fn drop(&mut self) {
-        let v: &AtomicI64 = unsafe{
-            self.0.as_ref().unwrap()
-        };
-        let c = v.fetch_add(1, Ordering::Release);
+        let c = self.0.fetch_add(1, Ordering::Release);
         debug!("concurrency after releasing: {}", c + 1);
     }
 }
