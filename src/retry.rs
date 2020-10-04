@@ -21,7 +21,7 @@ impl RetryCategory {
             ErrorCode::OperationTimeout => RetryCategory::Depends,
             ErrorCode::SslHandshakeFail => RetryCategory::Unretriable,
             ErrorCode::WriteRequestFail => RetryCategory::Depends,
-            ErrorCode::CorruptedResponse => RetryCategory::Depends,
+            ErrorCode::CorruptedResponse => RetryCategory::Unretriable,
             ErrorCode::NoAvailableConnection => RetryCategory::Retriable,
             ErrorCode::OTSUnknown => RetryCategory::Depends,
             ErrorCode::OTSOutOfColumnCountLimit => RetryCategory::Unretriable,

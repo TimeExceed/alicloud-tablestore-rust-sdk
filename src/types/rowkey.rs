@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use crate::{Error, ErrorCode};
 use std::convert::TryFrom;
+use std::cmp::{PartialOrd, Ordering};
 use super::*;
 
 #[cfg(test)]
@@ -66,6 +67,69 @@ impl ExtendedRowKey {
 
     pub fn into_iter(self) -> impl Iterator<Item=ExtendedRowKeyColumn> {
         self.0.into_iter()
+    }
+}
+
+impl ExtendedRowKey {
+    pub fn fill_with_infmin<T>(
+        rowkey_names: &[T],
+        rowkey_prefix: Vec<RowKeyValue>,
+    ) -> Result<ExtendedRowKey, Error>
+    where T: ToString + std::fmt::Debug {
+        ExtendedRowKey::fill_with(
+            rowkey_names,
+            rowkey_prefix,
+            ExtendedRowKeyValue::InfMin)
+    }
+
+    pub fn fill_with_infmax<T>(
+        rowkey_names: &[T],
+        rowkey_prefix: Vec<RowKeyValue>,
+    ) -> Result<ExtendedRowKey, Error>
+    where T: ToString + std::fmt::Debug {
+        ExtendedRowKey::fill_with(
+            rowkey_names,
+            rowkey_prefix,
+            ExtendedRowKeyValue::InfMax)
+    }
+
+    fn fill_with<T>(
+        rowkey_names: &[T],
+        rowkey_prefix: Vec<RowKeyValue>,
+        fill: ExtendedRowKeyValue,
+    ) -> Result<ExtendedRowKey, Error>
+    where T: ToString + std::fmt::Debug {
+        if rowkey_names.len() < rowkey_prefix.len() {
+            error!("rowkey_names must be longer than rowkey_prefix.\
+                \trowkey_name: {:?}\
+                \trowkey_prefix.len(): {}",
+                rowkey_names,
+                rowkey_prefix.len());
+            return Err(Error{
+                code: ErrorCode::ClientUnknown,
+                message: "rowkey_names must be longer than rowkey_prefix.".to_string(),
+            });
+        }
+        let (names_prefix, names_suffix) = rowkey_names.split_at(rowkey_prefix.len());
+        let mut res: Vec<ExtendedRowKeyColumn> = names_prefix.iter()
+            .zip(rowkey_prefix.into_iter())
+            .map(|(name, value)| {
+                ExtendedRowKeyColumn{
+                    name: name.to_string().into(),
+                    value: value.into(),
+                }
+            })
+            .collect();
+        let suffix: Vec<ExtendedRowKeyColumn> = names_suffix.iter()
+            .map(|name| {
+                ExtendedRowKeyColumn{
+                    name: name.to_string().into(),
+                    value: fill.clone(),
+                }
+            })
+            .collect();
+        res.extend_from_slice(&suffix);
+        Ok(ExtendedRowKey(res))
     }
 }
 
@@ -349,4 +413,149 @@ impl Arbitrary for ExtendedRowKey {
         }
         res
     }
+}
+
+impl PartialOrd for RowKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let a = ExtendedRowKey::from(self.clone());
+        let b = ExtendedRowKey::from(other.clone());
+        a.partial_cmp(&b)
+    }
+}
+
+impl PartialOrd for ExtendedRowKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl PartialOrd for RowKeyColumn {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.value.partial_cmp(&other.value)
+    }
+}
+
+impl PartialOrd for ExtendedRowKeyColumn {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.value.partial_cmp(&other.value)
+    }
+}
+
+impl PartialOrd for RowKeyValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let a = ExtendedRowKeyValue::from(self.clone());
+        let b = ExtendedRowKeyValue::from(other.clone());
+        a.partial_cmp(&b)
+    }
+}
+
+impl PartialOrd for ExtendedRowKeyValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match self {
+            ExtendedRowKeyValue::InfMin => {
+                match other {
+                    ExtendedRowKeyValue::InfMin => None,
+                    ExtendedRowKeyValue::AutoIncr => None,
+                    _ => Some(Ordering::Less)
+                }
+            }
+            ExtendedRowKeyValue::InfMax => {
+                match other {
+                    ExtendedRowKeyValue::InfMax => None,
+                    ExtendedRowKeyValue::AutoIncr => None,
+                    _ => Some(Ordering::Greater)
+                }
+            }
+            ExtendedRowKeyValue::Int(a) => {
+                match other {
+                    ExtendedRowKeyValue::Int(b) => a.partial_cmp(b),
+                    _ => None
+                }
+            }
+            ExtendedRowKeyValue::Str(a) => {
+                match other {
+                    ExtendedRowKeyValue::Str(b) => a.partial_cmp(b),
+                    _ => None
+                }
+            }
+            ExtendedRowKeyValue::Blob(a) => {
+                match other {
+                    ExtendedRowKeyValue::Blob(b) => a.partial_cmp(b),
+                    _ => None
+                }
+            }
+            _ => None
+        }
+    }
+}
+
+#[test]
+fn rowkeyvalue_order_infmin() {
+    let xs: Vec<ExtendedRowKeyValue> = vec![
+        ExtendedRowKeyValue::Int(0),
+        ExtendedRowKeyValue::Str("".to_string()),
+        ExtendedRowKeyValue::Blob(Bytes::from_static(b"")),
+        ExtendedRowKeyValue::InfMax,
+    ];
+    let trial = ExtendedRowKeyValue::InfMin;
+    for x in xs.iter() {
+        assert!(&trial < x,
+            "lefthand: {:?} righthand: {:?}",
+            trial,
+            x);
+    }
+}
+
+#[test]
+fn rowkeyvalue_order_infmax() {
+    let xs: Vec<ExtendedRowKeyValue> = vec![
+        ExtendedRowKeyValue::Int(0),
+        ExtendedRowKeyValue::Str("".to_string()),
+        ExtendedRowKeyValue::Blob(Bytes::from_static(b"")),
+        ExtendedRowKeyValue::InfMin,
+    ];
+    let trial = ExtendedRowKeyValue::InfMax;
+    for x in xs.iter() {
+        assert!(&trial > x,
+            "lefthand: {:?} righthand: {:?}",
+            trial,
+            x);
+    }
+}
+
+#[cfg(test)]
+#[quickcheck]
+fn rowkeyvalue_order_int((a, b): (i64, i64)) {
+    let ta = ExtendedRowKeyValue::Int(a);
+    let tb = ExtendedRowKeyValue::Int(b);
+    assert_eq!(a.partial_cmp(&b), ta.partial_cmp(&tb),
+        "lefthand: {:?} righthand: {:?}",
+        ta,
+        tb);
+}
+
+#[cfg(test)]
+#[quickcheck]
+fn rowkeyvalue_order_str((a, b): (Name, Name)) {
+    let a: String = a.into();
+    let b: String = b.into();
+    let ta = ExtendedRowKeyValue::Str(a.clone());
+    let tb = ExtendedRowKeyValue::Str(b.clone());
+    assert_eq!(a.partial_cmp(&b), ta.partial_cmp(&tb),
+        "lefthand: {:?} righthand: {:?}",
+        ta,
+        tb);
+}
+
+#[cfg(test)]
+#[quickcheck]
+fn rowkeyvalue_order_blob((a, b): (Name, Name)) {
+    let a = Bytes::copy_from_slice(String::from(a).as_bytes());
+    let b = Bytes::copy_from_slice(String::from(b).as_bytes());
+    let ta = ExtendedRowKeyValue::Blob(a.clone());
+    let tb = ExtendedRowKeyValue::Blob(b.clone());
+    assert_eq!(a.partial_cmp(&b), ta.partial_cmp(&tb),
+        "lefthand: {:?} righthand: {:?}",
+        ta,
+        tb);
 }

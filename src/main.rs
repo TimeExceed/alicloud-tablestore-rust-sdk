@@ -76,6 +76,28 @@ async fn async_gogogo(
         let resp = client.put_row(req).await?;
         println!("put row ok: {:?}", resp);
     }
+    {
+        let start = ots::ExtendedRowKey(vec![
+            ots::ExtendedRowKeyColumn{
+                name: ots::Name::new("pkey"),
+                value: ots::ExtendedRowKeyValue::InfMin,
+            }
+        ]);
+        let end = ots::ExtendedRowKey(vec![
+            ots::ExtendedRowKeyColumn{
+                name: ots::Name::new("pkey"),
+                value: ots::ExtendedRowKeyValue::InfMax,
+            }
+        ]);
+        let req = ots::GetRangeRequest{
+            table_name: table_name.clone().into(),
+            inclusive_start: start,
+            exclusive_end: end,
+            token: None,
+        };
+        let resp = client.get_range(req).await?;
+        println!("get-range ok: {:?}", resp);
+    }
     Ok(())
 }
 

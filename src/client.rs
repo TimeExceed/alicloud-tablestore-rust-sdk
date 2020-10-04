@@ -62,5 +62,15 @@ impl Client {
         self.cmd_sender.clone().send(cmd).await.unwrap();
         rx.await.unwrap()
     }
+
+    pub async fn get_range(
+        &self,
+        req: types::GetRangeRequest,
+    ) -> Result<types::GetRangeResponse, Error> {
+        let (tx, rx) = oneshot::channel();
+        let cmd = client_impl::Cmd::GetRange(req, tx);
+        self.cmd_sender.clone().send(cmd).await.unwrap();
+        rx.await.unwrap()
+    }
 }
 

@@ -6,6 +6,7 @@ pub enum Action {
     DeleteTable,
     ListTable,
     PutRow,
+    GetRange,
 }
 
 impl ToString for Action {
@@ -15,6 +16,7 @@ impl ToString for Action {
             Action::DeleteTable => "/DeleteTable".to_string(),
             Action::ListTable => "/ListTable".to_string(),
             Action::PutRow => "/PutRow".to_string(),
+            Action::GetRange => "/GetRange".to_string(),
         }
     }
 }

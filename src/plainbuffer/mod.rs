@@ -57,3 +57,20 @@ impl PbufSerde for Vec<crate::types::Row> {
         Ok(res)
     }
 }
+
+impl PbufSerde for crate::types::ExtendedRowKey {
+    fn to_pbuf(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = vec![];
+        let mut checksum = 0u8;
+        consts::HEADER.serialize(&mut buf);
+        self.serialize_crc8(&mut buf, &mut checksum);
+        crc8_u8(&mut checksum, 0); // placeholder for missing row-delete marker
+        Tag::RowChecksum.serialize(&mut buf);
+        checksum.serialize(&mut buf);
+        buf
+    }
+
+    fn from_pbuf(_buf: Bytes) -> Result<Self, Error> {
+        unimplemented!()
+    }
+}

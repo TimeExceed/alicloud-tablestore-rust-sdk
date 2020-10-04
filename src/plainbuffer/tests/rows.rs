@@ -145,3 +145,4 @@ fn pbufserde_row_vec(oracle: Vec<Row>) {
     let trial = Vec::<Row>::from_pbuf(buf).unwrap();
     assert_eq!(oracle, trial);
 }
+

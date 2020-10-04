@@ -52,6 +52,9 @@ impl ClientImpl {
                 Cmd::PutRow(req, resp_tx) => {
                     self.async_issue(req, resp_tx, &mut concurrency);
                 }
+                Cmd::GetRange(req, resp_tx) => {
+                    self.async_issue(req, resp_tx, &mut concurrency);
+                }
             }
         }
     }
@@ -299,6 +302,10 @@ pub(crate) enum Cmd {
         types::PutRowRequest,
         oneshot::Sender<Result<types::PutRowResponse, Error>>,
     ),
+    GetRange(
+        types::GetRangeRequest,
+        oneshot::Sender<Result<types::GetRangeResponse, Error>>,
+    )
 }
 
 const HEADER_NAME_API_VERSION: &str = "x-ots-apiversion";

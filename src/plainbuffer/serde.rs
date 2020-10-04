@@ -340,7 +340,6 @@ impl SerdeWithCrc8 for ExtendedRowKeyValue {
             _ => unimplemented!()
         };
         if exp_payload_len != real_payload_len {
-            println!("here: {} {}", exp_payload_len, real_payload_len);
             return issue_error();
         }
         res
@@ -436,11 +435,8 @@ impl SerdeWithCrc8 for ExtendedRowKeyColumn {
         }
         let mut real_chksum = 0u8;
         let name = Name::deserialize_crc8(inp, &mut real_chksum)?;
-        println!("name: {:?}", name);
         let value = ExtendedRowKeyValue::deserialize_crc8(inp, &mut real_chksum)?;
-        println!("value: {:?}", value);
         deser_check_checksum(inp, real_chksum)?;
-        println!("real checksum: {:x}", real_chksum);
         super::crc8_u8(checksum, real_chksum);
         Ok(ExtendedRowKeyColumn{
             name,
@@ -607,7 +603,6 @@ impl SerdeWithCrc8 for ExtendedRowKey {
         let mut res = vec![];
         while peek_and_expect(inp, super::Tag::Cell) {
             let x = ExtendedRowKeyColumn::deserialize_crc8(inp, checksum)?;
-            println!("{:?}", x);
             res.push(x);
         }
         Ok(ExtendedRowKey::new(res))
