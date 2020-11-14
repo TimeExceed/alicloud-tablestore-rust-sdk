@@ -70,7 +70,13 @@ impl PbufSerde for crate::types::ExtendedRowKey {
         buf
     }
 
-    fn from_pbuf(_buf: Bytes) -> Result<Self, Error> {
-        unimplemented!()
+    fn from_pbuf(mut buf: Bytes) -> Result<Self, Error> {
+        let header = u32::deserialize(&mut buf)?;
+        if header != consts::HEADER {
+            return serde::issue_error();
+        }
+        let mut checksum = 0u8;
+        let res = crate::types::ExtendedRowKey::deserialize_crc8(&mut buf, &mut checksum)?;
+        Ok(res)
     }
 }

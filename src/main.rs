@@ -44,59 +44,52 @@ async fn async_gogogo(
     let opts = ots::ClientOptions::default();
     let client = ots::Client::new(ep, cred, opts)?;
     let table_name = "Smile".to_string();
-    let _x = TableFinalizer::new(client.clone(), table_name.clone());
+    let pkey_names = vec!["pkey"];
+    // let _x = TableFinalizer::new(client.clone(), table_name.clone());
+    // {
+    //     let meta = ots::TableMeta{
+    //         name: table_name.clone().into(),
+    //         schema: vec![
+    //             ots::PkeyColumnSchema{
+    //                 name: ots::Name::new(pkey_names[0]),
+    //                 type_: ots::PkeyValueType::Str,
+    //             },
+    //         ],
+    //     };
+    //     let req = ots::CreateTableRequest::new(meta);
+    //     let _resp = client.create_table(req).await?;
+    // }
+    // {
+    //     let row = ots::Row{
+    //         row_key: ots::RowKey(vec![ots::RowKeyColumn{
+    //             name: ots::Name::new(pkey_names[0]),
+    //             value: ots::RowKeyValue::Str("exist".to_string()),
+    //         }]),
+    //         attrs: vec![
+    //             ots::Attribute{
+    //                 name: ots::Name::new("attr"),
+    //                 value: ots::AttrValue::Int(123),
+    //                 timestamp: ots::AttrTimestamp::ClientAttach(ots::DateTime::now()),
+    //             }
+    //         ],
+    //     };
+    //     let req = ots::PutRowRequest::new(table_name.clone(), row)?;
+    //     let resp = client.put_row(req).await?;
+    //     println!("put row ok: {:?}", resp);
+    // }
     {
-        let meta = ots::TableMeta{
-            name: table_name.clone().into(),
-            schema: vec![
-                ots::PkeyColumnSchema{
-                    name: ots::Name::new("pkey"),
-                    type_: ots::PkeyValueType::Str,
-                },
-            ],
-        };
-        let req = ots::CreateTableRequest::new(meta);
-        let _resp = client.create_table(req).await?;
-    }
-    {
-        let row = ots::Row{
-            row_key: ots::RowKey(vec![ots::RowKeyColumn{
-                name: ots::Name::new("pkey"),
-                value: ots::RowKeyValue::Str("exist".to_string()),
-            }]),
-            attrs: vec![
-                ots::Attribute{
-                    name: ots::Name::new("attr"),
-                    value: ots::AttrValue::Int(123),
-                    timestamp: ots::AttrTimestamp::ClientAttach(ots::DateTime::now()),
-                }
-            ],
-        };
-        let req = ots::PutRowRequest::new(table_name, row)?;
-        let resp = client.put_row(req).await?;
-        println!("put row ok: {:?}", resp);
-    }
-    {
-        let start = ots::ExtendedRowKey(vec![
-            ots::ExtendedRowKeyColumn{
-                name: ots::Name::new("pkey"),
-                value: ots::ExtendedRowKeyValue::InfMin,
-            }
-        ]);
-        let end = ots::ExtendedRowKey(vec![
-            ots::ExtendedRowKeyColumn{
-                name: ots::Name::new("pkey"),
-                value: ots::ExtendedRowKeyValue::InfMax,
-            }
-        ]);
+        let start = ots::ExtendedRowKey::fill_with_infmin(&pkey_names, vec![])?;
+        let end = ots::ExtendedRowKey::fill_with_infmax(&pkey_names, vec![])?;
         let req = ots::GetRangeRequest{
             table_name: table_name.clone().into(),
             inclusive_start: start,
             exclusive_end: end,
-            token: None,
         };
-        let resp = client.get_range(req).await?;
-        println!("get-range ok: {:?}", resp);
+        let mut row_stream = client.scan(req, 1)?;
+        println!("get-range ok");
+        while let Some(x) = row_stream.recv().await {
+            println!("{:?}", x);
+        }
     }
     Ok(())
 }

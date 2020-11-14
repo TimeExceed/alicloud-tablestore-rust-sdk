@@ -33,6 +33,12 @@ impl PartialEq<String> for Name {
     }
 }
 
+impl std::fmt::Display for Name {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[cfg(test)]
 impl Arbitrary for Name {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {

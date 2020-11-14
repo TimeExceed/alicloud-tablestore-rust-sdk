@@ -529,7 +529,7 @@ impl SerdeWithCrc8 for Attribute {
         let mut cell_chksum = 0u8;
         self.name.serialize_crc8(out, &mut cell_chksum);
         self.value.serialize_crc8(out, &mut cell_chksum);
-        if let AttrTimestamp::ClientAttach(tm) = &self.timestamp {
+        if let Some(tm) = &self.timestamp {
             super::Tag::CellTimestamp.serialize(out);
             let msecs = tm.to_millis();
             msecs.serialize_crc8(out, &mut cell_chksum);
@@ -549,7 +549,7 @@ impl SerdeWithCrc8 for Attribute {
         let mut cell_chksum = 0u8;
         let name = Name::deserialize_crc8(inp, &mut cell_chksum)?;
         let value = AttrValue::deserialize_crc8(inp, &mut cell_chksum)?;
-        let tm = if peek_and_expect(inp, super::Tag::CellTimestamp) {
+        let timestamp = if peek_and_expect(inp, super::Tag::CellTimestamp) {
             super::Tag::deserialize(inp)?;
             let msecs = i64::deserialize_crc8(inp, &mut cell_chksum)?;
             Some(DateTime::from_millis(msecs))
@@ -561,7 +561,7 @@ impl SerdeWithCrc8 for Attribute {
         Ok(Attribute{
             name,
             value,
-            timestamp: AttrTimestamp::from(tm),
+            timestamp,
         })
     }
 }

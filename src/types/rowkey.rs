@@ -469,18 +469,24 @@ impl PartialOrd for ExtendedRowKeyValue {
             ExtendedRowKeyValue::Int(a) => {
                 match other {
                     ExtendedRowKeyValue::Int(b) => a.partial_cmp(b),
+                    ExtendedRowKeyValue::InfMin => Some(Ordering::Greater),
+                    ExtendedRowKeyValue::InfMax => Some(Ordering::Less),
                     _ => None
                 }
             }
             ExtendedRowKeyValue::Str(a) => {
                 match other {
                     ExtendedRowKeyValue::Str(b) => a.partial_cmp(b),
+                    ExtendedRowKeyValue::InfMin => Some(Ordering::Greater),
+                    ExtendedRowKeyValue::InfMax => Some(Ordering::Less),
                     _ => None
                 }
             }
             ExtendedRowKeyValue::Blob(a) => {
                 match other {
                     ExtendedRowKeyValue::Blob(b) => a.partial_cmp(b),
+                    ExtendedRowKeyValue::InfMin => Some(Ordering::Greater),
+                    ExtendedRowKeyValue::InfMax => Some(Ordering::Less),
                     _ => None
                 }
             }
@@ -504,6 +510,12 @@ fn rowkeyvalue_order_infmin() {
             trial,
             x);
     }
+    for x in xs.iter() {
+        assert!(x > &trial,
+            "lefthand: {:?} righthand: {:?}",
+            x,
+            trial);
+    }
 }
 
 #[test]
@@ -520,6 +532,12 @@ fn rowkeyvalue_order_infmax() {
             "lefthand: {:?} righthand: {:?}",
             trial,
             x);
+    }
+    for x in xs.iter() {
+        assert!(x < &trial,
+            "lefthand: {:?} righthand: {:?}",
+            x,
+            trial);
     }
 }
 

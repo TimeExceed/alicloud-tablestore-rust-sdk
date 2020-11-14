@@ -10,14 +10,13 @@ pub struct GetRangeRequest {
     pub table_name: Name,
     pub inclusive_start: ExtendedRowKey,
     pub exclusive_end: ExtendedRowKey,
-    pub token: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct GetRangeResponse {
     pub base: super::BaseResponse,
     pub rows: Vec<Row>,
-    pub next_token: Option<Vec<u8>>,
+    pub next_row_key: Option<ExtendedRowKey>,
 }
 
 impl From<GetRangeRequest> for pb::GetRangeRequest {
@@ -40,7 +39,7 @@ impl From<GetRangeRequest> for pb::GetRangeRequest {
             filter: None,
             start_column: None,
             end_column: None,
-            token: x.token,
+            token: None,
         }
     }
 }
@@ -56,10 +55,17 @@ impl From<pb::GetRangeResponse> for GetRangeResponse {
     fn from(x: pb::GetRangeResponse) -> Self {
         let buf = Bytes::from(x.rows);
         let rows = Vec::<Row>::from_pbuf(buf).unwrap();
+        let next_row_key = if let Some(nrk) = x.next_start_primary_key {
+            let buf = Bytes::from(nrk);
+            let res = ExtendedRowKey::from_pbuf(buf).unwrap();
+            Some(res)
+        } else {
+            None
+        };
         Self{
             base: super::BaseResponse::default(),
             rows,
-            next_token: x.next_token,
+            next_row_key,
         }
     }
 }

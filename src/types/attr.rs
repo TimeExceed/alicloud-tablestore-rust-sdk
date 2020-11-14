@@ -17,13 +17,7 @@ pub enum AttrValue {
 pub struct Attribute {
     pub name: Name,
     pub value: AttrValue,
-    pub timestamp: AttrTimestamp,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum AttrTimestamp {
-    ServerAttach,
-    ClientAttach(DateTime),
+    pub timestamp: Option<DateTime>,
 }
 
 impl PartialEq for AttrValue {
@@ -106,23 +100,14 @@ impl Arbitrary for AttrValue {
     }
 }
 
-impl From<Option<DateTime>> for AttrTimestamp {
-    fn from(x: Option<DateTime>) -> Self {
-        match x {
-            Some(x) => AttrTimestamp::ClientAttach(x),
-            None => AttrTimestamp::ServerAttach,
-        }
-    }
-}
-
 #[cfg(test)]
 impl Arbitrary for Attribute {
     fn arbitrary<G: Gen>(g: &mut G) -> Self {
         let has_tm = bool::arbitrary(g);
         let timestamp = if has_tm {
-            AttrTimestamp::ClientAttach(DateTime::now())
+            Some(DateTime::now())
         } else {
-            AttrTimestamp::ServerAttach
+            None
         };
         Attribute{
             name: Name::arbitrary(g),
